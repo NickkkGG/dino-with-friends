@@ -93,6 +93,23 @@ export function measureCells(text: string): number {
   return Math.max(0, w - LETTER_SPACING);
 }
 
+/** Breaks a text at its spaces into lines of at most `maxCells` cells. A word longer than that gets a line of its own. */
+export function wrapText(text: string, maxCells: number): string[] {
+  const lines: string[] = [];
+  let line = '';
+  for (const word of text.split(' ')) {
+    const longer = line === '' ? word : `${line} ${word}`;
+    if (line !== '' && measureCells(longer) > maxCells) {
+      lines.push(line);
+      line = word;
+    } else {
+      line = longer;
+    }
+  }
+  lines.push(line);
+  return lines;
+}
+
 /**
  * Draws a text with its top left corner at world point (x, y), FONT_CELL world pixels per cell. With a halo colour,
  * every letter is first outlined one cell wide in it, so the text reads on top of anything.

@@ -67,3 +67,48 @@ export function soloLayout(vw: number, vh: number, coarse: boolean): SoloLayout 
     zones,
   };
 }
+
+/** Sizes on the title screen, in CSS pixels. */
+export interface TitleLayout {
+  portrait: boolean;
+  /** Pixels per cell of DINO and FRIENDS; "with" is half that. */
+  logo: number;
+  /** The demo track, 600 × 150 at this width. */
+  trackWidth: number;
+  buttonWidth: number;
+  /** Between SOLO and MULTIPLAYER. */
+  buttonGap: number;
+  /** Between the logo, the track, the buttons and CREDITS. */
+  gap: number;
+  /** Pixels per cell of CREDITS. */
+  small: number;
+}
+
+// The height of a 2-cell PixelButton: 7 rows of 2, 6 px of padding and a 2 px border above and below.
+const BUTTON_H = 30;
+// A window shorter than this (a phone on its side) gets the small logo.
+const SHORT = 560;
+
+/**
+ * The title: the logo, a demo track as wide as the screen, SOLO and MULTIPLAYER, then CREDITS, one
+ * above the other. A short wide window keeps the track only as wide as leaves room for the rest.
+ */
+export function titleLayout(vw: number, vh: number): TitleLayout {
+  if (vh > vw) return { portrait: true, logo: 4.5, trackWidth: vw, buttonWidth: 230, buttonGap: 16, gap: 48, small: 1.5 };
+  const short = vh < SHORT;
+  const logo = short ? 3.5 : 6;
+  const small = short ? 1.5 : 2;
+  const gap = short ? 14 : 26;
+  const buttonGap = 14;
+  // Everything but the track: the logo's three lines 8 px apart, the buttons, CREDITS, the gaps and 20 px above and below.
+  const rest = 7 * logo * 2.5 + 16 + 2 * BUTTON_H + buttonGap + 7 * small + 3 * gap + 40;
+  return {
+    portrait: false,
+    logo,
+    trackWidth: Math.max(0, Math.min(vw, (WORLD_W / WORLD_H) * (vh - rest))),
+    buttonWidth: short ? 230 : 260,
+    buttonGap,
+    gap,
+    small,
+  };
+}

@@ -1,7 +1,7 @@
 // Copyright 2024 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the third_party/chromium/LICENSE file.
-// Modified for DINO with FRIENDS: DistanceMeter stepped and drawn apart: the score and its achievements come from the world, HI shows only once there is one, the place is worked out from the width at each draw, and reset also stops a flash.
+// Modified for DINO with FRIENDS: DistanceMeter stepped and drawn apart: the score and its achievements come from the world, HI shows only once there is one (in the score's place when the score is not shown), the place is worked out from the width at each draw, and reset also stops a flash.
 
 import { STEP_MS } from '../../../shared/sim/constants';
 import { blit } from './context';
@@ -76,7 +76,10 @@ export class MeterView {
     return this.paint;
   }
 
-  /** Draws the score (unless showScore is false) with its top at y, and HI when hi > 0, in a world `width` wide. */
+  /**
+   * Draws the score (unless showScore is false) with its top at y, and HI when hi > 0, in a world `width` wide. HI
+   * stands left of the score, or ends where the score would when there is none, as on the title.
+   */
   draw(dc: DrawContext, o: { width: number; y: number; hi: number; showScore: boolean }): void {
     const x = o.width - DEST_WIDTH * (this.units + 1);
     if (o.showScore && this.paint) {
@@ -84,7 +87,7 @@ export class MeterView {
     }
     if (o.hi > 0) {
       const hi = `HI ${(DEFAULT_STRING + o.hi).slice(-this.units)}`;
-      const hx = x - this.units * 2 * WIDTH;
+      const hx = o.showScore ? x - this.units * 2 * WIDTH : x - (hi.length - this.units) * DEST_WIDTH;
       dc.ctx.save();
       dc.ctx.globalAlpha = HI_ALPHA;
       for (let i = hi.length - 1; i >= 0; i--) {

@@ -66,12 +66,136 @@ body {
   gap: 6px;
 }
 
-/* The title screen until the real one comes. */
-.temp-title {
+/* Out of sight, but read by screen readers (and found by its text in the browser tests). */
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  border: 0;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+/* A button that is only its pixel text or icon. */
+.text-button {
+  appearance: none;
+  margin: 0;
+  padding: 8px;
+  border: 0;
+  background: none;
+  line-height: 0;
+  cursor: pointer;
+}
+
+.mute-button {
+  position: fixed;
+  top: 4px;
+  right: 4px;
+  z-index: 1;
+  appearance: none;
+  margin: 0;
+  padding: 12px;
+  border: 0;
+  background: none;
+  line-height: 0;
+  cursor: pointer;
+}
+
+.title-screen {
   min-height: 100vh;
+  box-sizing: border-box;
+  padding: 20px 0;
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 32px;
+}
+
+.title-logo {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+}
+
+/* The HI over a portrait demo sits right above the track's right end. */
+.title-track {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+}
+
+.title-hi {
+  margin: 0 4px 8px 0;
+}
+
+.title-buttons {
+  display: flex;
+  flex-direction: column;
+}
+
+.title-buttons > button {
+  width: 100%;
+}
+
+/* The credits scroll; the idle strip stays at the bottom. */
+.credits-screen {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.credits-scroll {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+}
+
+.credits-strip {
+  width: 100%;
+  margin: 0 auto;
+  box-sizing: border-box;
+}
+
+.credits-back {
+  position: absolute;
+  top: 4px;
+  left: 4px;
+}
+
+.credits-column {
+  margin: 0 auto;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 24px;
+}
+
+.credits-lines {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+}
+
+.license-text {
+  align-self: stretch;
+  margin: 0;
+  padding: 12px;
+  border: 1px solid #dcdcdc;
+  color: #757575;
+  font: 11px/1.5 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  white-space: pre-wrap;
+  user-select: text;
+  -webkit-user-select: text;
+}
+
+.idle-strip {
+  line-height: 0;
 }

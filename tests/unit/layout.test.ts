@@ -1,5 +1,6 @@
 import { expect, it } from 'vitest';
-import { HUD_STRIP, SKY, soloLayout } from '../../src/game/layout';
+import { HUD_STRIP, SKY, soloLayout, titleLayout } from '../../src/game/layout';
+import type { TitleLayout } from '../../src/game/layout';
 
 it('laptop 1440×900: wide, full width, world centred', () => {
   const l = soloLayout(1440, 900, false);
@@ -51,4 +52,35 @@ it('a tall window without touch is portrait with no touch zones; a short one wit
   expect(soloLayout(800, 1000, false)).toMatchObject({ mode: 'portrait', zones: null });
   expect(soloLayout(800, 800, false).mode).toBe('wide'); // a square is wide
   expect(soloLayout(1024, 768, true).zones!.left.y).toBe(Math.round(0.38 * 768));
+});
+
+// The title's column, top to bottom: the logo (DINO, with at half size, FRIENDS, 8 px apart), the track (150/600 of its
+// width), two 30 px buttons, the CREDITS line, with a gap between each, and 20 px above and below.
+function titleHeight(t: TitleLayout): number {
+  const logo = 7 * t.logo * 2.5 + 16;
+  const buttons = 2 * 30 + t.buttonGap;
+  return logo + t.trackWidth / 4 + buttons + 7 * t.small + 3 * t.gap + 40;
+}
+
+it('title on a laptop: the big logo and a track as wide as the screen', () => {
+  const t = titleLayout(1440, 900);
+  expect(t).toMatchObject({ portrait: false, logo: 6, trackWidth: 1440, buttonWidth: 260, small: 2 });
+  expect(titleHeight(t)).toBeLessThanOrEqual(900);
+});
+
+it('title on a phone: a smaller logo over a full width track', () => {
+  const t = titleLayout(390, 844);
+  expect(t).toMatchObject({ portrait: true, logo: 4.5, trackWidth: 390, buttonWidth: 230, small: 1.5 });
+  expect(titleHeight(t)).toBeLessThanOrEqual(844);
+  expect(titleLayout(320, 568).buttonWidth).toBe(230); // still fits a small phone
+});
+
+it('a short window gets a smaller logo and a narrower track, so the title still fits', () => {
+  for (const [vw, vh] of [[844, 390], [1024, 600], [1600, 500], [667, 375]] as const) {
+    const t = titleLayout(vw, vh);
+    expect(t.portrait).toBe(false);
+    expect(t.trackWidth).toBeLessThanOrEqual(vw);
+    expect(titleHeight(t), `${vw}×${vh}`).toBeLessThanOrEqual(vh);
+  }
+  expect(titleLayout(844, 390).logo).toBe(3.5);
 });

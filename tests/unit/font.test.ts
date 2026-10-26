@@ -2,7 +2,7 @@ import { expect, it } from 'vitest';
 import { GAME_TEXTS } from '../../src/app/dev/game-texts';
 import type { DrawContext } from '../../src/game/draw/context';
 import { LDPI_POS } from '../../src/game/sprite-defs';
-import { FONT_CELL, GLYPHS, LETTER_SPACING, drawText, measureCells } from '../../src/ui/font';
+import { FONT_CELL, GLYPHS, LETTER_SPACING, drawText, measureCells, wrapText } from '../../src/ui/font';
 import { callsOf, fillsIn, makeFakeCtx } from './helpers/fake-ctx';
 
 function dcAt(k: number) {
@@ -91,4 +91,19 @@ it('drawText with a halo draws every outline before the letters, so the letters 
   const plain = dcAt(2);
   drawText(plain.dc, 'GO', 10, 4, '#535353');
   expect(fillsIn(plain.calls, '#ffffff')).toEqual([]);
+});
+
+it('wrapText breaks a text at its spaces into lines that fit, and keeps a longer word whole', () => {
+  const text = 'BASED ON THE OFFLINE DINO GAME FROM CHROMIUM.';
+  expect(wrapText(text, measureCells(text))).toEqual([text]);
+  const lines = wrapText(text, 200);
+  expect(lines.length).toBeGreaterThan(1);
+  expect(lines.join(' ')).toBe(text);
+  for (const line of lines) expect(measureCells(line)).toBeLessThanOrEqual(200);
+  // greedy: each line takes as many words as fit
+  for (let i = 0; i + 1 < lines.length; i++) {
+    expect(measureCells(`${lines[i]} ${lines[i + 1]!.split(' ')[0]}`)).toBeGreaterThan(200);
+  }
+  expect(wrapText('A VERYLONGWORD B', 20)).toEqual(['A', 'VERYLONGWORD', 'B']);
+  expect(wrapText('', 50)).toEqual(['']);
 });

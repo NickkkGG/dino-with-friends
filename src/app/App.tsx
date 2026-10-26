@@ -8,12 +8,13 @@ import type { SpriteSet } from '../game/sprites';
 import { readNumber } from '../game/storage';
 import { NO_TEST_MODE, parseTestMode } from '../game/test-mode';
 import type { TestMode } from '../game/test-mode';
-import { PixelButton } from '../ui/PixelButton';
-import { PixelText } from '../ui/PixelText';
+import { CreditsScreen } from './CreditsScreen';
 import { GlyphSheetView } from './dev/GlyphSheetView';
 import { SceneView } from './dev/SceneView';
 import { SpriteSheetView } from './dev/SpriteSheetView';
+import { MuteButton } from './MuteButton';
 import { SoloScreen } from './SoloScreen';
+import { TitleScreen } from './TitleScreen';
 
 export const GAME_TITLE = 'DINO with FRIENDS';
 
@@ -52,16 +53,6 @@ function useDebugHook(screen: Screen, sound: Sound): void {
   }, [sound]);
 }
 
-// The title screen until the real one, with the demo, comes: the name and the way into SOLO.
-function TempTitle({ onSolo }: { onSolo(): void }) {
-  return (
-    <div data-testid="title-screen" className="temp-title">
-      <PixelText text={GAME_TITLE} size={3} />
-      <PixelButton label="SOLO" variant="outline" onClick={onSolo} testId="btn-solo" />
-    </div>
-  );
-}
-
 // The game: the sprites and the sound, loaded once, and the screen on show.
 function Game({ first }: { first: Screen }) {
   const [screen, setScreen] = useState<Screen>(first);
@@ -84,10 +75,19 @@ function Game({ first }: { first: Screen }) {
   }, []);
 
   if (!sprites) return null;
-  if (screen === 'solo') {
-    return <SoloScreen sprites={sprites} sound={sound} testMode={testMode} onMenu={() => setScreen('title')} />;
-  }
-  return <TempTitle onSolo={() => setScreen('solo')} />;
+  const toTitle = () => setScreen('title');
+  // SOLO has its own speaker, inside the part of the screen that turns over at night.
+  if (screen === 'solo') return <SoloScreen sprites={sprites} sound={sound} testMode={testMode} onMenu={toTitle} />;
+  return (
+    <>
+      {screen === 'credits' ? (
+        <CreditsScreen sprites={sprites} onBack={toTitle} />
+      ) : (
+        <TitleScreen sprites={sprites} onSolo={() => setScreen('solo')} onCredits={() => setScreen('credits')} />
+      )}
+      <MuteButton sound={sound} />
+    </>
+  );
 }
 
 export function App() {

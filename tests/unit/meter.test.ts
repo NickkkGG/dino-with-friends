@@ -64,3 +64,13 @@ it('meter: on an achievement the digits freeze and flash 250 ms off / 250 ms on,
   hidden.draw(dc, { width: 600, y: 10, hi: 0, showScore: true });
   expect(callsOf(calls, 'drawImage')).toEqual([]); // off: the digits are not drawn
 });
+
+it('meter: without the score, HI takes its place on the right, as on the title', () => {
+  const m = new MeterView();
+  m.step(0, false);
+  const { dc, calls } = fakeDc();
+  m.draw(dc, { width: 600, y: 10, hi: 1234, showScore: false });
+  // 'HI 01234' ends where the score's last digit would be: x = 600 - 11 × 6 + 4 × 11 = 578
+  const hi = [...'HI 01234'].map((ch, i) => (ch === ' ' ? null : char(ch === 'H' ? 10 : ch === 'I' ? 11 : Number(ch), 501 + 11 * i, 10)));
+  expect(callsOf(calls, 'drawImage')).toEqual(hi.filter((c) => c !== null).reverse());
+});

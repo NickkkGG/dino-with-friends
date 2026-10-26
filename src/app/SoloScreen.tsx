@@ -9,6 +9,7 @@ import type { Sound } from '../game/sound';
 import type { SpriteSet } from '../game/sprites';
 import type { TestMode } from '../game/test-mode';
 import { FONT_CELL, FONT_ROWS } from '../ui/font';
+import { MuteButton } from './MuteButton';
 import { PixelButton } from '../ui/PixelButton';
 import { PixelText, useDevicePixelRatio } from '../ui/PixelText';
 
@@ -26,7 +27,10 @@ const HINT_GAP = 8;
 
 const viewport = () => ({ w: window.innerWidth, h: window.innerHeight });
 
-/** SOLO: the game canvas, the HUD strip on a portrait screen, the start text, MENU after a crash, and the touch hints. */
+/**
+ * SOLO: the game canvas, the HUD strip on a portrait screen, the start text, MENU after a crash, the touch hints, and the
+ * speaker, all of it turning over at night.
+ */
 export function SoloScreen({ sprites, sound, testMode, onMenu }: SoloScreenProps) {
   const surface = useRef<HTMLDivElement>(null);
   const canvas = useRef<HTMLCanvasElement>(null);
@@ -88,6 +92,7 @@ export function SoloScreen({ sprites, sound, testMode, onMenu }: SoloScreenProps
           </span>
         </div>
       )}
+      <MuteButton sound={sound} />
       {view.hints && layout.zones && (
         <div data-testid="touch-hints" className="touch-hints">
           <TouchHint zone={layout.zones.left} side="left" portrait={layout.mode === 'portrait'} text={['HOLD', 'TO DUCK']} />
