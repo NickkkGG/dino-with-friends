@@ -11,6 +11,9 @@ export interface DrawContext {
   oy: number;
 }
 
+/** What filling cells and rectangles needs: a DrawContext without the sprite sheet, so plain canvases can use it too. */
+export type CellContext = Pick<DrawContext, 'ctx' | 'k' | 'oy'>;
+
 /**
  * The device-pixel edge of cell c of a bitmap whose cells are `cell` world pixels wide. Cells of 1.5 come out 2, 1, 2, 1
  * device pixels at k = 1, like the original 1x sprites, and whole at 2x.
@@ -34,7 +37,7 @@ export function blit(
  * the same cell sizes.
  */
 export function fillCells(
-  dc: DrawContext, rows: readonly string[], x: number, y: number, color: string, cell = 1, cx = 0, cy = 0,
+  dc: CellContext, rows: readonly string[], x: number, y: number, color: string, cell = 1, cx = 0, cy = 0,
 ): void {
   const { ctx, k } = dc;
   const ox = Math.round(x * k);
@@ -52,7 +55,7 @@ export function fillCells(
 }
 
 /** Fills a rectangle given in world pixels, with its edges rounded to device pixels. */
-export function fillWorldRect(dc: DrawContext, x: number, y: number, w: number, h: number, color: string): void {
+export function fillWorldRect(dc: CellContext, x: number, y: number, w: number, h: number, color: string): void {
   const { ctx, k } = dc;
   const x0 = Math.round(x * k);
   const y0 = Math.round((y + dc.oy) * k);
