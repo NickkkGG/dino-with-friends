@@ -10,6 +10,12 @@ body {
   -webkit-tap-highlight-color: transparent;
 }
 
+/* The whole window, which every screen fills. */
+.app {
+  position: fixed;
+  inset: 0;
+}
+
 /* SOLO. At night the whole screen turns over, with the original's fade. */
 .solo-screen {
   position: fixed;
@@ -104,8 +110,10 @@ body {
   cursor: pointer;
 }
 
+/* Fixed to the window, like SOLO and CREDITS: on a phone 100vh is taller than what the browser's bars leave. */
 .title-screen {
-  min-height: 100vh;
+  position: fixed;
+  inset: 0;
   box-sizing: border-box;
   padding: 20px 0;
   display: flex;

@@ -55,11 +55,13 @@ it('a tall window without touch is portrait with no touch zones; a short one wit
 });
 
 // The title's column, top to bottom: the logo (DINO, with at half size, FRIENDS, 8 px apart), the track (150/600 of its
-// width), two 30 px buttons, the CREDITS line, with a gap between each, and 20 px above and below.
+// width), two 30 px buttons, the CREDITS button (its line and 8 px of padding above and below), with a gap between
+// each, and 20 px above and below.
 function titleHeight(t: TitleLayout): number {
   const logo = 7 * t.logo * 2.5 + 16;
   const buttons = 2 * 30 + t.buttonGap;
-  return logo + t.trackWidth / 4 + buttons + 7 * t.small + 3 * t.gap + 40;
+  const credits = 7 * t.small + 2 * 8;
+  return logo + t.trackWidth / 4 + buttons + credits + 3 * t.gap + 40;
 }
 
 it('title on a laptop: the big logo and a track as wide as the screen', () => {

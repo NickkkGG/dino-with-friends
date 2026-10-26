@@ -15,6 +15,8 @@ MENU goes back to the title screen, and the speaker in the top right corner swit
 
 ## Run locally
 
+You need Node.js 22.12+, 24, or 26+.
+
 ```bash
 npm install
 npm run dev
@@ -37,6 +39,8 @@ npm run typecheck   # TypeScript
 npm run test:e2e    # end-to-end tests (Playwright) on a laptop and a phone, in Chromium and WebKit
 npm run build       # production build in dist/
 ```
+
+The end-to-end tests run in Playwright's Chromium and WebKit, which you install once with `npx playwright install chromium webkit`.
 
 ## Credits and licenses
 

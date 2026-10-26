@@ -86,6 +86,8 @@ export interface TitleLayout {
 
 // The height of a 2-cell PixelButton: 7 rows of 2, 6 px of padding and a 2 px border above and below.
 const BUTTON_H = 30;
+// The padding above and below the CREDITS line, which is a text button.
+const CREDITS_PAD = 8;
 // A window shorter than this (a phone on its side) gets the small logo.
 const SHORT = 560;
 
@@ -101,7 +103,7 @@ export function titleLayout(vw: number, vh: number): TitleLayout {
   const gap = short ? 14 : 26;
   const buttonGap = 14;
   // Everything but the track: the logo's three lines 8 px apart, the buttons, CREDITS, the gaps and 20 px above and below.
-  const rest = 7 * logo * 2.5 + 16 + 2 * BUTTON_H + buttonGap + 7 * small + 3 * gap + 40;
+  const rest = 7 * logo * 2.5 + 16 + 2 * BUTTON_H + buttonGap + 7 * small + 2 * CREDITS_PAD + 3 * gap + 40;
   return {
     portrait: false,
     logo,

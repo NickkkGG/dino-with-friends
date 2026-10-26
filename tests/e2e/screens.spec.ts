@@ -32,6 +32,30 @@ test('title: logo, a living demo, the HI and the buttons', async ({ page }) => {
   await expect(page.getByTestId('btn-mute')).toBeVisible();
 });
 
+test('the whole title fits the window, on a phone on its side too', async ({ page }, info) => {
+  await page.addInitScript(() => localStorage.setItem('dwf.hi', '1240'));
+  await page.goto('/');
+  await expect(page.getByTestId('title-screen')).toBeVisible();
+  const upright = page.viewportSize()!;
+  const sizes = isPhone(info.project.name) ? [upright, { width: 844, height: 390 }] : [upright];
+  for (const size of sizes) {
+    await page.setViewportSize(size);
+    // The title is no taller than the window, with room above the logo and under CREDITS. Polled, since the layout
+    // follows a resize a frame or two later; a failure shows the numbers.
+    const window = `${size.width}×${size.height}`;
+    await expect
+      .poll(() =>
+        page.evaluate(() => {
+          const title = document.querySelector('[data-testid="title-screen"]')!;
+          const box = title.getBoundingClientRect().height;
+          const roomAbove = title.firstElementChild!.getBoundingClientRect().top;
+          const roomBelow = innerHeight - document.querySelector('[data-testid="link-credits"]')!.getBoundingClientRect().bottom;
+          return { window: `${innerWidth}×${innerHeight}`, box, roomAbove, roomBelow, fits: box <= innerHeight && roomAbove >= 16 && roomBelow >= 16 };
+        }), { message: window })
+      .toMatchObject({ window, fits: true });
+  }
+});
+
 test('no HI on the title before there is one', async ({ page }) => {
   await page.goto('/');
   await expect(page.getByTestId('title-screen')).toBeVisible();

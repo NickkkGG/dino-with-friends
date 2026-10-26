@@ -93,5 +93,9 @@ function Game({ first }: { first: Screen }) {
 export function App() {
   const view = import.meta.env.DEV ? new URLSearchParams(window.location.search).get('view') : null;
   const page = import.meta.env.DEV ? devPage(view) : null;
-  return <main data-testid="app">{page ?? <Game first={view === 'solo' ? 'solo' : 'title'} />}</main>;
+  return (
+    <main data-testid="app" className="app">
+      {page ?? <Game first={view === 'solo' ? 'solo' : 'title'} />}
+    </main>
+  );
 }

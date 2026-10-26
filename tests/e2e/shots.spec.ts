@@ -1,6 +1,6 @@
 import { copyFileSync, mkdirSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
-import { test } from '@playwright/test';
+import { expect, test } from '@playwright/test';
 import type { Page, TestInfo } from '@playwright/test';
 
 // Screenshots of every screen and a short video, for checking the game by eye. They go to shots/, which git ignores.
@@ -69,9 +69,25 @@ for (const landscape of [false, true]) {
       test.setTimeout(90_000);
       await page.goto('/?view=solo&seed=7');
       await startRound(page);
-      await until(page, 'window.__dwf.hp === 1', 80_000);
-      await page.waitForTimeout(1600); // past the hurt face and the blinking after the hit
+      // The last heart's face shows once the hurt face is over, 21 steps after the hit, between the blinks that follow
+      // (6 steps on, 6 off), and the last heart itself blinks (15 steps on, 15 off). The dino is hit again as soon as its
+      // protection ends, 90 steps after the hit, so the round is stopped, as when the page loses focus, on a step that
+      // shows both.
+      const shown = await page.evaluate(async () => {
+        const frame = () => new Promise((r) => requestAnimationFrame(r));
+        const d = () => window.__dwf!;
+        while (d().hp !== 1) await frame();
+        // Frames go one step at a time here, so this is the step of the hit or up to two after it: hence the room.
+        const hit = d().step - 1;
+        const dinoShows = (since: number) => since >= 21 && (since - 21) % 12 <= 3;
+        const heartShows = (step: number) => Math.floor(step / 15) % 2 === 0;
+        while (!(dinoShows(d().step - 1 - hit) && heartShows(d().step))) await frame();
+        window.dispatchEvent(new Event('blur'));
+        return { phase: d().phase, hp: d().hp, sinceHit: d().step - 1 - hit };
+      });
       await shoot(page, info, `solo-low${tag}`);
+      expect(shown).toMatchObject({ phase: 'running', hp: 1 }); // still running on the last heart
+      expect(shown.sinceHit).toBeLessThan(90); // still blinking, so the picture is of a step chosen to show the dino
     });
 
     test('solo at night', async ({ page }, info) => {
