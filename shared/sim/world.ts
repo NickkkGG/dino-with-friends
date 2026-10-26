@@ -209,6 +209,9 @@ function noEvents(): StepEvents {
   };
 }
 
+/** A step on which nothing happened, for whatever steps along without the world: the drawing while it is over. */
+export const NO_EVENTS: Readonly<StepEvents> = Object.freeze(noEvents());
+
 /**
  * How fast the ground runs on the next step: the timeline's speed, slowed down after a hit and sped up by the speed skill.
  * A hit drops the speed to SLOW_MIN of what it was, and it climbs back to the full speed over SLOW_RECOVER_STEPS steps.

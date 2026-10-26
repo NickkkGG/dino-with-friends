@@ -1,5 +1,5 @@
 import { expect, it } from 'vitest';
-import { blit, cellEdge, fillCells, fillWorldRect } from '../../src/game/draw/context';
+import { blit, cellEdge, fillCells, fillCellsWithHalo, fillWorldRect, haloCells } from '../../src/game/draw/context';
 import type { DrawContext } from '../../src/game/draw/context';
 import { LDPI_POS } from '../../src/game/sprite-defs';
 import type { SpriteSheet } from '../../src/game/sprites';
@@ -57,4 +57,22 @@ it('fillWorldRect fills a world rectangle on whole device pixels', () => {
   const half = dcWith(1, 0);
   fillWorldRect(half.dc, 1.5, 0, 1.5, 1, '#000'); // edges are rounded, so neighbours never overlap or leave a gap
   expect(callsOf(half.calls, 'fillRect')).toEqual([[2, 0, 1, 1]]);
+});
+
+it('haloCells grows a bitmap by one cell all round, filled next to every filled cell', () => {
+  expect(haloCells(['#'])).toEqual(['###', '###', '###']);
+  expect(haloCells(['#.', '..'])).toEqual(['###.', '###.', '###.', '....']);
+  expect(haloCells(['.#.'])).toEqual(['.###.', '.###.', '.###.']);
+});
+
+it('fillCellsWithHalo draws the outline first, on the same cell grid as the bitmap', () => {
+  const { dc, calls } = dcWith(2, 0);
+  fillCellsWithHalo(dc, ['#'], 10, 5, '#535353', '#ffffff', 1.5, 4, 0);
+  const styles = calls.filter((c) => c.op === 'set fillStyle').map((c) => c.args[0]);
+  expect(styles).toEqual(['#ffffff', '#535353']);
+  const rects = callsOf(calls, 'fillRect') as number[][];
+  expect(rects).toHaveLength(9 + 1);
+  // the bitmap's one cell, and the outline's cells around it on the 1.5 px grid of cell 4
+  expect(rects.at(-1)).toEqual([20, 10, 3, 3]);
+  expect(rects.slice(0, 9).map((r) => [r[0], r[1]])).toEqual([[17, 7], [20, 7], [23, 7], [17, 10], [20, 10], [23, 10], [17, 13], [20, 13], [23, 13]]);
 });

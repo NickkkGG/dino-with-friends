@@ -1,4 +1,5 @@
 import { GlyphSheetView } from './dev/GlyphSheetView';
+import { SceneView } from './dev/SceneView';
 import { SpriteSheetView } from './dev/SpriteSheetView';
 
 export const GAME_TITLE = 'DINO with FRIENDS';
@@ -7,6 +8,7 @@ export const GAME_TITLE = 'DINO with FRIENDS';
 function devPage(view: string | null) {
   if (view === 'sprites') return <SpriteSheetView />;
   if (view === 'glyphs') return <GlyphSheetView />;
+  if (view === 'scene') return <SceneView />;
   return null;
 }
 

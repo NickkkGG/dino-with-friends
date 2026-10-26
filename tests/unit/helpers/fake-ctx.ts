@@ -38,3 +38,17 @@ export function makeFakeCtx(): { ctx: CanvasRenderingContext2D; calls: FakeCall[
 
 /** The recorded calls of one method, as argument lists. */
 export const callsOf = (calls: readonly FakeCall[], op: string): unknown[][] => calls.filter((c) => c.op === op).map((c) => c.args);
+
+/** The fillRect calls made while fillStyle was `color`, in order. */
+export function fillsIn(calls: readonly FakeCall[], color: string): number[][] {
+  let style: unknown = '#000000';
+  const saved: unknown[] = [];
+  const out: number[][] = [];
+  for (const c of calls) {
+    if (c.op === 'set fillStyle') style = c.args[0];
+    else if (c.op === 'save') saved.push(style);
+    else if (c.op === 'restore') style = saved.pop() ?? style;
+    else if (c.op === 'fillRect' && style === color) out.push(c.args as number[]);
+  }
+  return out;
+}

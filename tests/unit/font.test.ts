@@ -3,7 +3,7 @@ import { GAME_TEXTS } from '../../src/app/dev/game-texts';
 import type { DrawContext } from '../../src/game/draw/context';
 import { LDPI_POS } from '../../src/game/sprite-defs';
 import { FONT_CELL, GLYPHS, LETTER_SPACING, drawText, measureCells } from '../../src/ui/font';
-import { callsOf, makeFakeCtx } from './helpers/fake-ctx';
+import { callsOf, fillsIn, makeFakeCtx } from './helpers/fake-ctx';
 
 function dcAt(k: number) {
   const { ctx, calls } = makeFakeCtx();
@@ -76,4 +76,19 @@ it('measures and draws a character it has no glyph for as ?', () => {
   drawText(a.dc, 'é', 0, 0, '#535353');
   drawText(b.dc, '?', 0, 0, '#535353');
   expect(callsOf(a.calls, 'fillRect')).toEqual(callsOf(b.calls, 'fillRect'));
+});
+
+it('drawText with a halo draws every outline before the letters, so the letters stay whole', () => {
+  const { dc, calls } = dcAt(2);
+  drawText(dc, 'GO', 10, 4, '#535353', '#ffffff');
+  const styles = calls.filter((c) => c.op === 'set fillStyle').map((c) => c.args[0]);
+  expect(styles.indexOf('#535353')).toBeGreaterThan(styles.lastIndexOf('#ffffff'));
+  expect(fillsIn(calls, '#535353')).toHaveLength(inked('GO'));
+  // the outline of G starts one cell up and left of it
+  const halo = fillsIn(calls, '#ffffff');
+  expect(Math.min(...halo.map((r) => r[0]!))).toBe(20 - 3);
+  expect(Math.min(...halo.map((r) => r[1]!))).toBe(8 - 3);
+  const plain = dcAt(2);
+  drawText(plain.dc, 'GO', 10, 4, '#535353');
+  expect(fillsIn(plain.calls, '#ffffff')).toEqual([]);
 });

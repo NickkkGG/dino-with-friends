@@ -1,5 +1,5 @@
 import type { CellContext } from '../game/draw/context';
-import { fillCells } from '../game/draw/context';
+import { fillCells, haloCells } from '../game/draw/context';
 
 // The pixel font. G, A, M, E, O, V and R are copied cell for cell from the GAME OVER text of the original 2x sprite
 // (third_party/chromium, under third_party/chromium/LICENSE); the rest are drawn in their style: 7 rows, uprights 2
@@ -93,12 +93,25 @@ export function measureCells(text: string): number {
   return Math.max(0, w - LETTER_SPACING);
 }
 
-/** Draws a text with its top left corner at world point (x, y), FONT_CELL world pixels per cell. */
-export function drawText(dc: CellContext, text: string, x: number, y: number, color: string): void {
+/**
+ * Draws a text with its top left corner at world point (x, y), FONT_CELL world pixels per cell. With a halo colour,
+ * every letter is first outlined one cell wide in it, so the text reads on top of anything.
+ */
+export function drawText(dc: CellContext, text: string, x: number, y: number, color: string, halo?: string): void {
+  if (halo) {
+    eachGlyph(text, (g, cx) => {
+      fillCells(dc, haloCells(g.rows), x + (cx - 1) * FONT_CELL, y - FONT_CELL, halo, FONT_CELL, cx - 1, -1);
+    });
+  }
+  eachGlyph(text, (g, cx) => fillCells(dc, g.rows, x + cx * FONT_CELL, y, color, FONT_CELL, cx, 0));
+}
+
+// Each glyph of a text with the cell its left edge is on.
+function eachGlyph(text: string, f: (g: Glyph, cx: number) => void): void {
   let cx = 0;
   for (const ch of text) {
     const g = glyphOf(ch);
-    fillCells(dc, g.rows, x + cx * FONT_CELL, y, color, FONT_CELL, cx, 0);
+    f(g, cx);
     cx += g.w + LETTER_SPACING;
   }
 }

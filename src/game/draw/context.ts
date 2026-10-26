@@ -54,6 +54,39 @@ export function fillCells(
   });
 }
 
+const halos = new WeakMap<readonly string[], readonly string[]>();
+
+/**
+ * A bitmap one cell bigger on every side, filled wherever the original has a filled cell on or next to it (diagonals
+ * too). Drawn under the bitmap in another colour, it outlines it. Worked out once for each bitmap.
+ */
+export function haloCells(rows: readonly string[]): readonly string[] {
+  const known = halos.get(rows);
+  if (known) return known;
+  const filled = (c: number, r: number) => rows[r]?.[c] === '#';
+  const width = rows[0]?.length ?? 0;
+  const out: string[] = [];
+  for (let r = -1; r <= rows.length; r++) {
+    let line = '';
+    for (let c = -1; c <= width; c++) {
+      let on = false;
+      for (let dy = -1; dy <= 1 && !on; dy++) for (let dx = -1; dx <= 1 && !on; dx++) on = filled(c + dx, r + dy);
+      line += on ? '#' : '.';
+    }
+    out.push(line);
+  }
+  halos.set(rows, out);
+  return out;
+}
+
+/** fillCells with a one-cell outline in `halo` drawn first, on the same cell grid, so the bitmap shows on anything. */
+export function fillCellsWithHalo(
+  dc: CellContext, rows: readonly string[], x: number, y: number, color: string, halo: string, cell = 1, cx = 0, cy = 0,
+): void {
+  fillCells(dc, haloCells(rows), x - cell, y - cell, halo, cell, cx - 1, cy - 1);
+  fillCells(dc, rows, x, y, color, cell, cx, cy);
+}
+
 /** Fills a rectangle given in world pixels, with its edges rounded to device pixels. */
 export function fillWorldRect(dc: CellContext, x: number, y: number, w: number, h: number, color: string): void {
   const { ctx, k } = dc;
