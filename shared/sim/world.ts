@@ -3,12 +3,13 @@
 // found in the third_party/chromium/LICENSE file.
 // Modified for DINO with FRIENDS: Runner.update's running part as a fixed 60 Hz step of plain state with no drawing or sound, plus hearts, a slowdown after a hit and the wait and intro.
 
-import type { SkillId } from './boxes';
-import { findCollision, overlapCenter } from './collision';
+import { BoxPlan } from './boxes';
+import type { SkillBox, SkillId } from './boxes';
+import { findCollision, overlapCenter, touchesBox } from './collision';
 import type { Box } from './collision';
 import {
-  ACHIEVEMENT_SCORE, CLEAR_STEPS, HP_START, HURT_STEPS, INTRO_STEPS, INVULN_STEPS, NIGHT_SCORE, NIGHT_STEPS, SLOW_MIN,
-  SLOW_RECOVER_STEPS, SPEED_SKILL_MULTIPLIER, SPEED_START, TREX_X, WORLD_W,
+  ACHIEVEMENT_SCORE, BOX_SIZE, BOX_Y, CLEAR_STEPS, HP_MAX, HP_START, HURT_STEPS, INTRO_STEPS, INVULN_STEPS, NIGHT_SCORE,
+  NIGHT_STEPS, SKILL_STEPS, SLOW_MIN, SLOW_RECOVER_STEPS, SPEED_SKILL_MULTIPLIER, SPEED_START, TREX_X, WORLD_W,
 } from './constants';
 import { Course } from './course';
 import type { CourseObstacle } from './course';
@@ -97,6 +98,8 @@ export interface World {
   readonly table: TimelineTable;
   /** The obstacles of this seed. Worked out once and kept, so clones share it. */
   readonly course: Course;
+  /** This player's skill boxes, or null in a world without boxes. Worked out once and kept, so clones share it. */
+  readonly boxes: BoxPlan | null;
   readonly opts: { applySkills: boolean; invincible: boolean; nightMode: boolean; forcedSkill: SkillId | null };
   phase: Phase;
   /** The number of the next running step. It starts at 0 when the round starts, so waiting and the intro are not counted. */
@@ -125,6 +128,8 @@ export interface World {
   end: number;
   /** How far each bird in the world has flown on against the ground, in pixels, by obstacle index. */
   drift: Map<number, number>;
+  /** The number of the next box to pick up: the ones before it were taken or missed. */
+  boxIndex: number;
   /** 0 by day. At night, the number of the night's step, counting from 1. */
   night: number;
   /** The score that an achievement was last reported for, so that a score which stays on a multiple of 100 reports once. */
@@ -148,12 +153,14 @@ export interface ObstacleView {
 
 export function createWorld(o: WorldOptions): World {
   const table = new TimelineTable(o.timeline ?? BASE_TIMELINE);
+  const course = new Course(o.seed, table);
   const waiting = o.phase === 'waiting';
   return {
     seed: o.seed,
     playerId: o.playerId,
     table,
-    course: new Course(o.seed, table),
+    course,
+    boxes: o.boxes === false ? null : new BoxPlan(course, table, o.seed, o.playerId),
     opts: {
       applySkills: o.applySkills ?? true,
       invincible: o.invincible ?? false,
@@ -176,12 +183,13 @@ export function createWorld(o: WorldOptions): World {
     first: 0,
     end: 0,
     drift: new Map(),
+    boxIndex: 0,
     night: 0,
     lastAchievement: 0,
   };
 }
 
-/** A copy that goes its own way. Only what is worked out once and kept, the table and the course, is shared. */
+/** A copy that goes its own way. Only what is worked out once and kept, the table, the course and the boxes, is shared. */
 export function cloneWorld(w: World): World {
   return {
     ...w,
@@ -251,6 +259,12 @@ export function visibleObstacles(w: World): ObstacleView[] {
   const views: ObstacleView[] = [];
   for (let i = w.first; i < w.end; i++) views.push(viewOf(w, i));
   return views;
+}
+
+/** The box that is coming next and its left edge on the screen, or null when there is none to show. Changes nothing. */
+export function pendingBox(w: World): { box: SkillBox; x: number } | null {
+  const box = w.boxes?.get(w.boxIndex) ?? null;
+  return box && { box, x: box.worldX - w.scroll };
 }
 
 /** Puts the dino back on the ground, for when a paused round goes on. Nothing else about the world changes. */
@@ -326,6 +340,32 @@ function checkCollision(w: World, ev: StepEvents): void {
   }
 }
 
+// The next box: a dino that touches it takes it, and one that lets it leave the screen has missed it. A box that found
+// no wide enough gap is let go once the score reaches its target (targets are at least 400 points apart, so no box that
+// was placed is ever passed over early). A +1 HEART with the hearts full gives the box's other skill; a skill picked up
+// again starts its time again.
+function pickBox(w: World, ev: StepEvents): void {
+  const plan = w.boxes;
+  if (!plan) return;
+  while (plan.get(w.boxIndex) === null && w.score >= plan.target(w.boxIndex)) w.boxIndex += 1;
+  const box = plan.get(w.boxIndex);
+  if (!box) return;
+  const x = box.worldX - w.scroll;
+  if (touchesBox(w.trex, x, BOX_Y, BOX_SIZE)) {
+    let id = w.opts.forcedSkill ?? box.skill;
+    if (id === 'heart' && w.hp >= HP_MAX) id = box.altSkill;
+    if (w.opts.applySkills) {
+      if (id === 'heart') w.hp = Math.min(HP_MAX, w.hp + 1);
+      else w.skillUntil[id] = w.step + 1 + SKILL_STEPS[id];
+    }
+    w.lastSkill = { id, step: w.step };
+    ev.picked = { n: box.n, skill: id };
+    w.boxIndex += 1;
+  } else if (x + BOX_SIZE < 0) {
+    w.boxIndex += 1;
+  }
+}
+
 // A multiple of ACHIEVEMENT_SCORE is reported once, however many steps the score stays on it. The score is a whole
 // number, so % is exact here.
 function reportAchievement(w: World, ev: StepEvents): void {
@@ -359,7 +399,7 @@ function stepRunning(w: World, v: number, ev: StepEvents): void {
     checkCollision(w, ev);
     if (ev.died) return; // the crash step adds no distance and is not counted, as in the original
   }
-  // The skill boxes are picked up here: after the check for a hit and before the distance is added.
+  pickBox(w, ev); // after the check for a hit, before the distance is added
   w.distance += v;
   w.score = scoreOf(w.distance);
   reportAchievement(w, ev);

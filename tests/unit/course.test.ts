@@ -4,7 +4,7 @@ import { fileURLToPath } from 'node:url';
 import { expect, it } from 'vitest';
 import { Course, groundSegment } from '../../shared/sim/course';
 import type { CourseObstacle } from '../../shared/sim/course';
-import { courseDigest } from '../../shared/sim/digest';
+import { boxDigest, courseDigest } from '../../shared/sim/digest';
 import { boxesForSize, typeConfig } from '../../shared/sim/obstacle-types';
 import { BASE_TIMELINE, TimelineTable, constantTimeline } from '../../shared/sim/timeline';
 
@@ -215,5 +215,25 @@ it('matches the stored digests', () => {
   for (const [seed, digest] of Object.entries(digests)) {
     const hint = `the stored digest for seed ${seed} is missing or different; UPDATE_FIXTURES=1 rewrites it`;
     expect(stored[seed], hint).toBe(digest);
+  }
+});
+
+it('makes a box digest of 8 hex characters that changes with the seed and with the player', () => {
+  expect(boxDigest(1, 'solo', 20)).toMatch(/^[0-9a-f]{8}$/);
+  expect(boxDigest(1, 'solo', 20)).not.toBe(boxDigest(2, 'solo', 20));
+  expect(boxDigest(1, 'solo', 20)).not.toBe(boxDigest(1, 'A', 20));
+  expect(boxDigest(1, 'solo', 20)).not.toBe(boxDigest(1, 'solo', 19));
+});
+
+it('matches the stored box digests', () => {
+  const digests = Object.fromEntries([1, 12345, 4294967295].map((seed) => [`${seed}:solo`, boxDigest(seed, 'solo', 20)]));
+  if (process.env.UPDATE_FIXTURES === '1') {
+    updateFixture({ boxes: digests });
+    return;
+  }
+  const stored = readFixture().boxes;
+  for (const [key, digest] of Object.entries(digests)) {
+    const hint = `the stored box digest for ${key} is missing or different; UPDATE_FIXTURES=1 rewrites it`;
+    expect(stored[key], hint).toBe(digest);
   }
 });
