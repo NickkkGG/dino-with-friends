@@ -1,4 +1,5 @@
 import { boxDigest, courseDigest } from '../../shared/sim/digest';
+import { skillRemaining } from '../../shared/sim/world';
 import type { Phase, World } from '../../shared/sim/world';
 
 // window.__dwf: what the end-to-end tests read from the page in the dev build. Nothing here runs in production.
@@ -11,6 +12,8 @@ export interface GameDebug {
   hp: number;
   trex: { x: number; y: number; jumping: boolean; ducking: boolean } | null;
   night: number;
+  /** The steps left of each timed skill. */
+  skills: { doubleJump: number; ghost: number; speed: number } | null;
   canvas: { width: number; height: number; cssWidth: number; k: number; sprite: 1 | 2 } | null;
 }
 
@@ -29,15 +32,18 @@ declare global {
 }
 
 const NO_GAME: Readonly<GameDebug> = Object.freeze({
-  phase: null, step: 0, score: 0, hp: 0, trex: null, night: 0, canvas: null,
+  phase: null, step: 0, score: 0, hp: 0, trex: null, night: 0, skills: null, canvas: null,
 });
 
 let current: (() => GameDebug) | null = null;
 
 /** What a world shows the tests, all but the canvas. */
-export function worldDebug(w: World): Omit<GameDebug, 'canvas'> {
+export function worldDebug(w: World): Omit<GameDebug, 'canvas'> & { skills: NonNullable<GameDebug['skills']> } {
   const { x, y, jumping, ducking } = w.trex;
-  return { phase: w.phase, step: w.step, score: w.score, hp: w.hp, trex: { x, y, jumping, ducking }, night: w.night };
+  const skills = {
+    doubleJump: skillRemaining(w, 'doubleJump'), ghost: skillRemaining(w, 'ghost'), speed: skillRemaining(w, 'speed'),
+  };
+  return { phase: w.phase, step: w.step, score: w.score, hp: w.hp, trex: { x, y, jumping, ducking }, night: w.night, skills };
 }
 
 /** The game that starts running reports here. The function it gets back stops the report, if it is still this one. */

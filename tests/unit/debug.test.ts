@@ -3,7 +3,7 @@ import { courseDigest } from '../../shared/sim/digest';
 import { NO_INPUT, createWorld, stepWorld } from '../../shared/sim/world';
 import { debugState, gameDebug, installDebugHook, reportGame, worldDebug } from '../../src/game/debug';
 
-const NO_GAME = { phase: null, step: 0, score: 0, hp: 0, trex: null, night: 0, canvas: null };
+const NO_GAME = { phase: null, step: 0, score: 0, hp: 0, trex: null, night: 0, skills: null, canvas: null };
 
 afterEach(() => {
   vi.unstubAllGlobals();
@@ -19,7 +19,11 @@ it('worldDebug: what the tests read from a world', () => {
     hp: 3,
     trex: { x: w.trex.x, y: w.trex.y, jumping: false, ducking: false },
     night: 0,
+    skills: { doubleJump: 0, ghost: 0, speed: 0 },
   });
+  const ghost = createWorld({ seed: 1, playerId: 'solo', forcedSkill: 'ghost', invincible: true });
+  while (worldDebug(ghost).skills.ghost === 0) stepWorld(ghost, NO_INPUT);
+  expect(worldDebug(ghost).skills.ghost).toBe(300); // what is left of it, in steps
 });
 
 it('reports the game on the screen, and nulls once it is gone', () => {
