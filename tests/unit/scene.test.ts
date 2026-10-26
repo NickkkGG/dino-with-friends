@@ -3,7 +3,8 @@ import { INTRO_STEPS } from '../../shared/sim/constants';
 import { NO_EVENTS, NO_INPUT, createWorld, stepWorld } from '../../shared/sim/world';
 import type { StepInput } from '../../shared/sim/world';
 import { Scene, easeOut, revealWidth } from '../../src/game/draw/scene';
-import { callsOf } from './helpers/fake-ctx';
+import { INK } from '../../src/game/colors';
+import { callsOf, fillsIn } from './helpers/fake-ctx';
 import { fakeDc } from './helpers/fake-dc';
 
 const JUMP: StepInput = { ...NO_INPUT, jumpPressed: true };
@@ -59,4 +60,25 @@ it('scene draws the HUD from the intro on, and GAME OVER only when dead', () => 
   w.phase = 'dead';
   scene.step(w, NO_EVENTS);
   expect(parts().gameOver).toBe(true);
+});
+
+it('setHud moves the hearts, the skills and the score out of the world and back', () => {
+  const scene = new Scene({ sky: 40, hud: 'inside', showScore: true, showHi: true, introClip: true, idleClouds: false }, () => 0.5);
+  const w = createWorld({ seed: 1, playerId: 'solo' });
+  scene.step(w, stepWorld(w, NO_INPUT));
+  const drawn = () => {
+    const { dc, calls } = fakeDc(1, 1, 40);
+    scene.draw(dc, w, 1234);
+    const digits = callsOf(calls, 'drawImage').filter((c) => c[2] === 2 && (c[1] as number) >= 655 && (c[1] as number) < 775);
+    // the hearts are the ink in the top left corner (the box coming next is also ink, far off to the right)
+    const hearts = fillsIn(calls, INK).some(([x, y]) => x! < 100 && y! < 40 + 20);
+    return { digits: digits.length, hearts };
+  };
+  expect(drawn()).toEqual({ digits: 5 + 7, hearts: true });
+  scene.setHud('none', false, false);
+  expect(drawn()).toEqual({ digits: 0, hearts: false });
+  scene.setHud('none', false, true); // the title: a HI and nothing else
+  expect(drawn()).toEqual({ digits: 7, hearts: false });
+  scene.setHud('inside', true, true);
+  expect(drawn()).toEqual({ digits: 5 + 7, hearts: true });
 });

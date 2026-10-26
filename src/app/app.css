@@ -9,3 +9,69 @@ body {
   -webkit-touch-callout: none;
   -webkit-tap-highlight-color: transparent;
 }
+
+/* SOLO. At night the whole screen turns over, with the original's fade. */
+.solo-screen {
+  position: fixed;
+  inset: 0;
+  overflow: hidden;
+  background: #ffffff;
+  transition: filter 1.5s cubic-bezier(0.65, 0.05, 0.36, 1);
+}
+
+.solo-screen.inverted {
+  filter: invert(1);
+}
+
+/* A centred line of text or a button; the rest of the line lets touches through to the game. */
+.solo-line {
+  position: absolute;
+  left: 0;
+  right: 0;
+  display: flex;
+  justify-content: center;
+  pointer-events: none;
+}
+
+.solo-line [data-ui] {
+  pointer-events: auto;
+}
+
+.touch-hints {
+  position: absolute;
+  inset: 0;
+}
+
+.touch-hints,
+.touch-hints * {
+  pointer-events: none;
+}
+
+.touch-hint {
+  position: absolute;
+}
+
+.touch-hint svg {
+  position: absolute;
+  inset: 0;
+}
+
+.touch-hint-label {
+  position: absolute;
+  left: 0;
+  right: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+}
+
+/* The title screen until the real one comes. */
+.temp-title {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 32px;
+}

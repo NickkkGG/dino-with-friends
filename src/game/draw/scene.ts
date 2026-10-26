@@ -61,7 +61,7 @@ export function revealWidth(w: World): number {
 
 /** Everything drawn for one world: the original's scene, with the hearts, skills and effects on top. */
 export class Scene {
-  private readonly o: SceneOptions;
+  private o: SceneOptions;
   private readonly clouds: Clouds;
   private readonly night: NightSky;
   private readonly trex: TrexView;
@@ -75,6 +75,11 @@ export class Scene {
     this.clouds = new Clouds(rand);
     this.night = new NightSky(rand);
     this.trex = new TrexView(rand);
+  }
+
+  /** Moves the hearts and the skills between the world and a HUD strip, and shows or hides the score and the HI. */
+  setHud(hud: SceneOptions['hud'], showScore: boolean, showHi: boolean): void {
+    this.o = { ...this.o, hud, showScore, showHi };
   }
 
   reset(): void {
