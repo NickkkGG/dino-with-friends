@@ -152,3 +152,25 @@ it('minBoxGap = ceil(BOX_GAP_PER_SPEED × speed) + BOX_GAP_MARGIN − 2 × the w
   expect(minBoxGap(13, 75)).toBe(minBoxGap(13, 0) - 150);
   expect(minBoxGap(13, 17)).toBe(minBoxGap(13, 0) - 34);
 });
+
+it('keeps placing boxes all the way to top speed', () => {
+  // A box every 400–700 points, skipped only when none of its gaps is wide enough. The original's gaps never
+  // grow past about 637 px, so a rule that asked too much at top speed would leave a long run with no boxes at all.
+  let slots = 0;
+  let placed = 0;
+  let lateSlots = 0;
+  let latePlaced = 0;
+  for (const seed of range(1, 100)) {
+    const plan = planOf(seed, 'solo');
+    for (const n of range(1, 15)) {
+      const late = plan.target(n) >= 2000; // well past the step where the speed reaches 13
+      const box = plan.get(n);
+      slots += 1;
+      if (box) placed += 1;
+      if (late) { lateSlots += 1; if (box) latePlaced += 1; }
+    }
+  }
+  expect(lateSlots).toBeGreaterThan(1000);
+  expect(placed / slots).toBeGreaterThan(0.7);
+  expect(latePlaced / lateSlots).toBeGreaterThan(0.7);
+});

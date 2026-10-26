@@ -62,5 +62,5 @@ export const BOX_Y = 96;
 export const BOX_FIRST_TARGET: readonly [number, number] = [150, 300];
 export const BOX_NEXT_TARGET: readonly [number, number] = [400, 700];
 export const BOX_SEARCH_GAPS = 5;
-export const BOX_GAP_PER_SPEED = 52;
-export const BOX_GAP_MARGIN = 40;
+export const BOX_GAP_PER_SPEED = 52; // with BOX_GAP_MARGIN: tuned so a last-moment jumper takes every box (autopilot tests)
+export const BOX_GAP_MARGIN = -20;
