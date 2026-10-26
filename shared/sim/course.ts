@@ -1,3 +1,8 @@
+// Copyright 2024 The Chromium Authors
+// Use of this source code is governed by a BSD-style license that can be
+// found in the third_party/chromium/LICENSE file.
+// Modified for DINO with FRIENDS: the spawning rules of Horizon and Obstacle and HorizonLine's ground pieces replayed from a seed for a phantom runner, a seeded generator instead of Math.random, no drawing.
+
 import type { Box } from './collision';
 import {
   CLEAR_STEPS, GAP_COEFFICIENT, MAX_GAP_COEFFICIENT, MAX_OBSTACLE_DUPLICATION, MAX_OBSTACLE_LENGTH, WORLD_W,
