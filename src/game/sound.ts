@@ -43,13 +43,15 @@ export class Sound {
 
   /**
    * Call from a touch, click or key handler. The first call makes the AudioContext and loads the sounds; any call
-   * resumes a context the browser has suspended. Settles once the sounds are loaded, or have failed to.
+   * resumes a context the browser has suspended. Settles once the sounds are loaded, or have failed to, and the context
+   * has started, or the browser has refused to start it: Safari takes a moment to start one, often longer than the
+   * sounds take to load.
    */
   unlock(): Promise<void> {
     const ctx = this.ctx ?? this.createContext();
     if (!ctx) return Promise.resolve();
-    if (ctx.state !== 'running') ctx.resume().catch(() => {});
-    return (this.loading ??= this.load(ctx));
+    const started = ctx.state === 'running' ? null : ctx.resume().catch(() => {});
+    return Promise.all([started, (this.loading ??= this.load(ctx))]).then(() => {});
   }
 
   /** Plays a sound now. Nothing happens while muted, before unlock(), or while a sound is not loaded yet. */

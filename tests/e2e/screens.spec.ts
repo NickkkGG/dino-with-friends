@@ -1,5 +1,6 @@
 import { expect, test } from '@playwright/test';
 import type { Page } from '@playwright/test';
+import { named } from './players';
 
 // The title, the credits and the sound button, in the dev build.
 
@@ -120,8 +121,9 @@ test('mute is remembered after a reload', async ({ page }) => {
   expect(await page.evaluate(() => window.__dwf!.muted)).toBe(true);
 });
 
-test('a pressed button answers with the press sound, and a muted game stays quiet', async ({ page }) => {
-  // Counts the sounds played from files. On these screens nothing else plays one.
+// Counts the sounds the page plays from files, from its first script on. On these screens only a pressed button
+// plays one.
+async function countSounds(page: Page): Promise<() => Promise<number>> {
   await page.addInitScript(() => {
     const w = window as unknown as { played: number };
     w.played = 0;
@@ -131,8 +133,12 @@ test('a pressed button answers with the press sound, and a muted game stays quie
       return start.apply(this, args);
     };
   });
+  return () => page.evaluate(() => (window as unknown as { played: number }).played);
+}
+
+test('a pressed button answers with the press sound, and a muted game stays quiet', async ({ page }) => {
+  const played = await countSounds(page);
   await page.goto('/');
-  const played = () => page.evaluate(() => (window as unknown as { played: number }).played);
   await page.getByTestId('link-credits').click(); // the first press loads the sounds, then plays
   await expect.poll(played).toBe(1);
   await page.getByTestId('btn-back').click();
@@ -142,4 +148,15 @@ test('a pressed button answers with the press sound, and a muted game stays quie
   expect(await played()).toBe(2);
   await page.getByTestId('btn-mute').click(); // SOUND ON again, and the press says so
   await expect.poll(played).toBe(3);
+});
+
+test('a button that greys out as it is pressed, as CREATE LOBBY does, is heard too', async ({ page }) => {
+  const played = await countSounds(page);
+  await named(page, 'NICK');
+  await page.goto('/');
+  await page.getByTestId('btn-multiplayer').click();
+  await expect.poll(played).toBe(1);
+  await page.getByTestId('btn-create').click();
+  await expect(page.getByTestId('lobby-code')).toHaveText(/^[A-Z2-9]{6}$/);
+  await expect.poll(played).toBe(2);
 });

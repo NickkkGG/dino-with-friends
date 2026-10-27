@@ -44,18 +44,28 @@ class FakeNode {
 
 class FakeAudioContext {
   static made: FakeAudioContext[] = [];
+  // How a context starts when it is resumed: at once; later, when the test calls started(), as WebKit takes a moment;
+  // or never, as a browser that refuses.
+  static starts: 'at once' | 'later' | 'refused' = 'at once';
   state = 'suspended';
   resumes = 0;
   readonly currentTime = 2;
   readonly destination = { kind: 'destination' };
   readonly nodes: FakeNode[] = [];
+  private readonly starting: (() => void)[] = [];
   constructor() {
     FakeAudioContext.made.push(this);
   }
   resume() {
     this.resumes += 1;
+    if (FakeAudioContext.starts === 'refused') return Promise.reject(new Error('not allowed'));
+    if (FakeAudioContext.starts === 'later') return new Promise<void>((resolve) => void this.starting.push(resolve));
     this.state = 'running';
     return Promise.resolve();
+  }
+  started() {
+    this.state = 'running';
+    for (const resolve of this.starting.splice(0)) resolve();
   }
   // A "decoded" sound is the text of the file it came from.
   decodeAudioData(data: ArrayBuffer) {
@@ -82,6 +92,7 @@ let fetched: string[];
 beforeEach(() => {
   setStorageForTests(memoryStorage());
   FakeAudioContext.made = [];
+  FakeAudioContext.starts = 'at once';
   fetched = [];
 });
 afterEach(() => {
@@ -139,6 +150,28 @@ it('unlock again resumes a context the browser suspended', async () => {
   await s.unlock();
   expect(ctx.resumes).toBe(2); // running: nothing to do
   expect(FakeAudioContext.made).toHaveLength(1);
+});
+
+it('unlock settles once the context has started as well, so a press played then is heard', async () => {
+  // WebKit takes a moment to start a context, often longer than the three sounds take to load.
+  withAudio();
+  FakeAudioContext.starts = 'later';
+  const s = new Sound(URLS);
+  const pressed = s.unlock().then(() => s.play('press'));
+  await new Promise((resolve) => setTimeout(resolve, 20)); // the sounds have loaded by now
+  const ctx = FakeAudioContext.made[0]!;
+  ctx.started();
+  await pressed;
+  expect(ctx.nodes.map((n) => n.buffer)).toEqual([{ text: '/press.mp3' }]);
+});
+
+it('unlock still settles when the browser will not start the context, and nothing plays', async () => {
+  withAudio();
+  FakeAudioContext.starts = 'refused';
+  const s = new Sound(URLS);
+  await expect(s.unlock()).resolves.toBeUndefined();
+  s.play('press');
+  expect(FakeAudioContext.made[0]!.nodes).toHaveLength(0);
 });
 
 it('play sends the decoded sound straight to the speakers, as the original does', async () => {
