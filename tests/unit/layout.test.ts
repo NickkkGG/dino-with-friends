@@ -3,6 +3,7 @@ import {
   HUD_STRIP, PEEK_COLUMN, SKY, boardHeightCells, menuSizes, menuSpacing, raceLayout, soloLayout, titleLayout,
 } from '../../src/game/layout';
 import type { RaceLayout, TitleLayout } from '../../src/game/layout';
+import { FONT_ROWS } from '../../src/ui/font';
 
 it('laptop 1440×900: wide, full width, world centred', () => {
   const l = soloLayout(1440, 900, false);
@@ -184,4 +185,30 @@ it('keeps a tower cell on whole device pixels', () => {
       expect(px).toBeGreaterThanOrEqual(1);
     }
   }
+});
+
+it('puts the watching line in the sky, and the peeking heads from the top of the world, on a laptop', () => {
+  const l = raceLayout(1440, 900, false, 2);
+  const worldTop = l.canvas.y + SKY * l.scale;
+  expect(l.peek).toEqual({ y: worldTop, cell: 1.5, max: 7 });
+  expect(l.label.cell).toBe(2);
+  expect(l.label.y).toBeGreaterThan(l.canvas.y);
+  expect(l.label.y + FONT_ROWS * l.label.cell).toBeLessThan(worldTop);
+  expect(l.hint).toEqual({ y: 900 - 16 - FONT_ROWS * 1.5, cell: 1.5 });
+});
+
+it('puts the watching line between the tower and the HUD strip, and three heads under the track, upright', () => {
+  const l = raceLayout(390, 844, true, 3);
+  expect(l.label.y).toBeGreaterThan(l.board.y + boardHeightCells(8) * l.board.cell);
+  expect(l.label.y + FONT_ROWS * l.label.cell).toBeLessThan(l.hud!.y);
+  expect(l.peek).toEqual({ y: l.canvas.y + l.canvas.h + 20, cell: l.board.cell, max: 3 });
+  expect(l.hint.y).toBe(844 - 16 - FONT_ROWS * 1.5);
+});
+
+it('puts the heads and the switch hint along the top, on a phone on its side', () => {
+  const l = raceLayout(844, 390, true, 3);
+  expect(l.peek).toEqual({ y: 12, cell: l.board.cell, max: 3 });
+  expect(l.hint.y).toBe(12);
+  expect(l.label.y).toBeGreaterThan(l.canvas.y);
+  expect(l.label.y + FONT_ROWS * l.label.cell).toBeLessThan(l.canvas.y + SKY * l.scale);
 });

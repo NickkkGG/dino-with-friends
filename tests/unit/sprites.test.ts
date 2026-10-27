@@ -46,7 +46,7 @@ it('sheetFor picks the 2x sheet only when the render params ask for it', () => {
   const canvas = {} as CanvasImageSource;
   const x1: SpriteSheet = { canvas, scale: 1, pos: LDPI_POS, faceRowY: { normal: 2, hurt: 100, low: 147 } };
   const x2: SpriteSheet = { canvas, scale: 2, pos: HDPI_POS, faceRowY: { normal: 2, hurt: 200, low: 294 } };
-  const set: SpriteSet = { x1, x2, heads: { alive: [], blink: [], dead: [] } };
+  const set: SpriteSet = { x1, x2, heads: { alive: [], blink: [], dead: [], peek: [], peekBlink: [] } };
   expect(sheetFor(set, { k: 4, sprite: 2, pixelated: true })).toBe(x2);
   expect(sheetFor(set, { k: 1, sprite: 1, pixelated: true })).toBe(x1);
 });

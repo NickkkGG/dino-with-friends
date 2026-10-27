@@ -166,7 +166,13 @@ export function boardHeightCells(rows: number): number {
 /** On a laptop the race keeps this many CSS pixels free along the right edge, for the heads of the players watching. */
 export const PEEK_COLUMN = 112;
 
-/** Where the race screen puts things, in CSS pixels: the track as in solo, the tower, the lobby code and the countdown. */
+/** How many cells high a peeking head's place is: its name, the head under it, and the two hands under its chin. */
+export const PEEK_SLOT_CELLS = 36;
+
+/**
+ * Where the race screen puts things, in CSS pixels: the track as in solo, the tower, the lobby code, the countdown, and
+ * what a watcher sees.
+ */
 export interface RaceLayout extends SoloLayout {
   /** The tower's top left corner, and its cell: a whole number of device pixels. */
   board: { x: number; y: number; cell: number };
@@ -174,6 +180,12 @@ export interface RaceLayout extends SoloLayout {
   code: { x: number; y: number } | null;
   /** The top of the countdown's number, which is centred across the screen, and its cell. */
   count: { y: number; cell: number };
+  /** WATCHING NAME and RECONNECTING...: the line's top and cell, centred over the track. */
+  label: { y: number; cell: number };
+  /** The peeking heads along the right edge: the top of the first, the cell, and how many fit. */
+  peek: { y: number; cell: number; max: number };
+  /** TAP A NAME TO SWITCH or ← → TO SWITCH: the line's top and cell, centred over the track. */
+  hint: { y: number; cell: number };
 }
 
 // The tower holds a line for each player a lobby can have.
@@ -182,12 +194,27 @@ const BOARD_ROWS = 8;
 const EDGE = 16;
 const CODE_LINE = 46;
 const CODE_CELL = 1.5;
+// The cells of the watching line and of the switch hint.
+const LABEL_CELL = 2;
+const HINT_CELL = 1.5;
+// A phone shows 3 peeking heads. A laptop shows as many as fit, up to 7, at a cell of at most 1.5, with the +N line and
+// its gap under the last one.
+const PEEK_PHONE = 3;
+const PEEK_LAPTOP = 7;
+const PEEK_CELL = 1.5;
+const PEEK_MORE_CELLS = 9;
 
 /** The largest cell up to `cell` that is a whole number of device pixels, and at least one of them. */
 const deviceCell = (cell: number, dpr: number): number => Math.max(1, Math.floor(cell * dpr + 1e-9)) / dpr;
 
 /** Where a countdown number of `cell` goes to have its middle at `mid`. */
 const countAt = (mid: number, cell: number): RaceLayout['count'] => ({ y: mid - (FONT_ROWS * cell) / 2, cell });
+
+/** The watching line in the middle of the sky above the world. */
+const inSky = (canvas: Rect, scale: number): RaceLayout['label'] => ({
+  y: canvas.y + (SKY * scale - FONT_ROWS * LABEL_CELL) / 2,
+  cell: LABEL_CELL,
+});
 
 /**
  * The race screen. A phone has the solo track and touch areas, with a tower that fits in the top left corner. A laptop
@@ -206,7 +233,30 @@ export function raceLayout(vw: number, vh: number, coarse: boolean, dpr: number)
     const count = portrait
       ? countAt((canvas.y + canvas.h + (solo.zones?.left.y ?? vh)) / 2, 10)
       : countAt(canvas.y + canvas.h / 2, 8);
-    return { ...solo, board: { x: 8, y: 8, cell: deviceCell(Math.min(1.5, room / towerCells), dpr) }, code: null, count };
+    const board = { x: 8, y: 8, cell: deviceCell(Math.min(1.5, room / towerCells), dpr) };
+    if (portrait) {
+      // The watching line halfway between the tower and the HUD strip, the heads under the track, the hint at the bottom.
+      const towerBottom = board.y + towerCells * board.cell;
+      return {
+        ...solo,
+        board,
+        code: null,
+        count,
+        label: { y: (towerBottom + solo.hud!.y - FONT_ROWS * LABEL_CELL) / 2, cell: LABEL_CELL },
+        peek: { y: canvas.y + canvas.h + 20, cell: board.cell, max: PEEK_PHONE },
+        hint: { y: vh - 16 - FONT_ROWS * HINT_CELL, cell: HINT_CELL },
+      };
+    }
+    // On its side the watching line is in the sky, and the heads and the hint are along the top, beside the tower.
+    return {
+      ...solo,
+      board,
+      code: null,
+      count,
+      label: inSky(canvas, solo.scale),
+      peek: { y: 12, cell: board.cell, max: PEEK_PHONE },
+      hint: { y: 12, cell: HINT_CELL },
+    };
   }
   const fixed = 2 * EDGE + CODE_LINE;
   let scale = Math.max(0, vw - PEEK_COLUMN) / WORLD_W;
@@ -218,6 +268,10 @@ export function raceLayout(vw: number, vh: number, coarse: boolean, dpr: number)
   cell = deviceCell(cell, dpr);
   const top = EDGE + towerCells * cell + EDGE;
   const canvas = { x: 0, y: top, w: WORLD_W * scale, h: (WORLD_H + SKY) * scale };
+  // The heads go down the right column from the top of the world, as many as fit above the bottom edge.
+  const worldTop = canvas.y + SKY * scale;
+  const peekCell = deviceCell(Math.min(PEEK_CELL, cell), dpr);
+  const fit = Math.floor((vh - EDGE - worldTop - PEEK_MORE_CELLS * peekCell) / (PEEK_SLOT_CELLS * peekCell));
   return {
     mode: 'wide',
     canvas,
@@ -229,5 +283,8 @@ export function raceLayout(vw: number, vh: number, coarse: boolean, dpr: number)
     board: { x: EDGE, y: EDGE, cell },
     code: { x: EDGE, y: vh - EDGE - FONT_ROWS * CODE_CELL },
     count: countAt(canvas.y + canvas.h / 2, 14),
+    label: inSky(canvas, scale),
+    peek: { y: worldTop, cell: peekCell, max: Math.max(1, Math.min(PEEK_LAPTOP, fit)) },
+    hint: { y: vh - EDGE - FONT_ROWS * HINT_CELL, cell: HINT_CELL },
   };
 }

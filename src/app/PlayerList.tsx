@@ -17,7 +17,8 @@ const BLINK_MS = 150;
 const OPEN_MIN_MS = 2000;
 const OPEN_MAX_MS = 6000;
 
-function useBlinking(): boolean {
+/** Whether a head has its eyes shut now: for a moment every few seconds, on its own time. */
+export function useBlinking(): boolean {
   const [shut, setShut] = useState(false);
   useEffect(() => {
     let id = 0;

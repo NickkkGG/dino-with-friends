@@ -462,3 +462,49 @@ body {
   padding: 0 16px;
   box-sizing: border-box;
 }
+
+/*
+ * The heads of those watching, peeking in from the right edge. A place moves up or down by a transform that eases; a
+ * head slides in from past the edge, and out again when they stop watching. Touches go through to the game.
+ */
+.peek-row {
+  position: absolute;
+  right: 0;
+  pointer-events: none;
+}
+
+.peek-slot,
+.peek-more {
+  position: absolute;
+  top: 0;
+  right: 0;
+  line-height: 0;
+  transition: transform 300ms ease-out;
+}
+
+.peek-slide {
+  position: absolute;
+  inset: 0;
+  animation: peek-in 300ms ease-out;
+}
+
+.peek-slide.leaving {
+  animation: peek-out 300ms ease-in forwards;
+}
+
+.peek-part {
+  position: absolute;
+  line-height: 0;
+}
+
+@keyframes peek-in {
+  from {
+    transform: translateX(100%);
+  }
+}
+
+@keyframes peek-out {
+  to {
+    transform: translateX(100%);
+  }
+}

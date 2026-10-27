@@ -46,6 +46,9 @@ export const ICON_SPEED: readonly string[] = [
 /** GHOST: a dino head facing right, drawn dotted. */
 export const ICON_GHOST: readonly string[] = ['.######', '##.####', '#######', '#######', '####...', '######.', '###....'];
 
+/** A hand holding the edge of the screen under a peeking head's chin; drawn mirrored, as the head is. */
+export const HAND: readonly string[] = ['###.', '####', '.##.'];
+
 /** The sound button while sound is on: a speaker and two waves. */
 export const SPEAKER_ON: readonly string[] = [
   '...#..#..', '..##...#.', '####.#..#', '####.#..#', '####.#..#', '..##...#.', '...#..#..',

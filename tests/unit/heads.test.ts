@@ -1,5 +1,5 @@
 import { expect, it } from 'vitest';
-import { HEAD_AREA, cutHead } from '../../src/game/heads';
+import { HEAD_AREA, cutHead, mirror } from '../../src/game/heads';
 
 /** A 25 × 19 RGBA area, white and clear but for the given pixels: [x, y, red, alpha]. */
 function area(pixels: readonly (readonly [number, number, number, number])[]) {
@@ -20,4 +20,13 @@ it('samples every second pixel from the second one and trims to the ink', () => 
 it('takes only dark, solid pixels as ink', () => {
   expect(cutHead(area([[1, 1, 83, 100], [3, 1, 200, 255], [5, 1, 83, 255]]))).toEqual(['#']);
   expect(cutHead(area([[1, 1, 83, 128], [3, 1, 128, 255]]))).toEqual([]);
+});
+
+it('cuts every pixel from the first one at full size', () => {
+  const ink = 83;
+  expect(cutHead(area([[0, 0, ink, 255], [1, 0, ink, 255], [1, 1, ink, 255]]), 1)).toEqual(['##', '.#']);
+});
+
+it('mirrors a head to face the other way', () => {
+  expect(mirror(['##.', '#..'])).toEqual(['.##', '..#']);
 });

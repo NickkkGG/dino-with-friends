@@ -3,7 +3,7 @@ import * as B from '../../src/game/bitmaps';
 
 const SIZES: Record<string, [number, number]> = {
   BOX: [16, 16], HEART: [7, 6], HEART_EMPTY: [7, 6], SPARK: [7, 7], SWEAT: [3, 5], PUFF: [10, 4], ICON_DOUBLE_JUMP: [7, 7],
-  ICON_SPEED: [9, 7], ICON_GHOST: [7, 7], SPEAKER_ON: [9, 7], SPEAKER_OFF: [9, 7],
+  ICON_SPEED: [9, 7], ICON_GHOST: [7, 7], SPEAKER_ON: [9, 7], SPEAKER_OFF: [9, 7], HAND: [4, 3],
 };
 
 it('every bitmap is a clean rectangle of # and .', () => {
@@ -23,6 +23,7 @@ it('every bitmap is a clean rectangle of # and .', () => {
 it('keeps the new bitmaps cell for cell', () => {
   expect(B.SPARK).toEqual(['#.....#', '.#...#.', '...#...', '..###..', '...#...', '.#...#.', '#.....#']);
   expect(B.SWEAT).toEqual(['.#.', '.#.', '###', '###', '.#.']);
+  expect(B.HAND).toEqual(['###.', '####', '.##.']);
   expect(B.PUFF).toEqual(['..##..##..', '.#..##..#.', '#........#', '.########.']);
   expect(B.ICON_DOUBLE_JUMP).toEqual(['...#...', '..###..', '.#####.', '...#...', '..###..', '.#####.', '...#...']);
   expect(B.HEART).toEqual(['.##.##.', '#######', '#######', '.#####.', '..###..', '...#...']);

@@ -55,10 +55,19 @@ test.describe('scenes', () => {
 const ALIVE = ['..########.', '.##.#######', '.##########', '.##########', '.##########', '.#####.....', '.########..', '#####......'];
 const BLINK = ['..########.', '.##########', '.##########', '.##########', '.##########', '.#####.....', '.########..', '#####......'];
 const DEAD = ['..########.', '.##..######', '.##.#######', '.##########', '.##########', '.##########', '.########..', '#####......'];
+// The peeking heads: every pixel of the standing and the blinking head, 22 × 17, facing left.
+const PEEK = ['..################....', '..################....', '####################..', '##############..####..',
+  '##############..####..', '####################..', '####################..', '####################..',
+  '####################..', '####################..', '####################..', '..........##########..',
+  '..........##########..', '....################..', '....################..', '............##########',
+  '............##########'];
+const PEEK_BLINK = PEEK.map((row, i) => (i === 3 || i === 4 ? '####################..' : row));
 
 test('the leaderboard heads are cut from the sprite', async ({ page }) => {
   await page.goto('/?view=sprites');
-  for (const [id, rows] of [['head-alive', ALIVE], ['head-blink', BLINK], ['head-dead', DEAD]] as const) {
+  for (const [id, rows] of [
+    ['head-alive', ALIVE], ['head-blink', BLINK], ['head-dead', DEAD], ['head-peek', PEEK], ['head-peek-blink', PEEK_BLINK],
+  ] as const) {
     await expect(page.getByTestId(id)).toHaveAttribute('data-rows', rows.join('|'));
   }
 });

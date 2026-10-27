@@ -3,6 +3,7 @@ import * as B from '../../game/bitmaps';
 import { INK, PAPER, SOFT } from '../../game/colors';
 import { blit, fillCells } from '../../game/draw/context';
 import type { DrawContext } from '../../game/draw/context';
+import { mirror } from '../../game/heads';
 import type { Heads } from '../../game/heads';
 import { loadSpriteSet } from '../../game/sprites';
 import { PixelIcon } from '../../ui/PixelIcon';
@@ -20,6 +21,11 @@ const TREX_H = 47;
 // Running 88 and 132, jumping 0, ducking 264 and 323: [x in the strip, width], in 1x pixels.
 const FRAMES = [[88, 44], [132, 44], [0, 44], [264, 59], [323, 59]] as const;
 const FACES = ['normal', 'hurt', 'low'] as const;
+
+// The heads, with the test id each has after `head-`, and their zoom: the peeking ones are cut at full size.
+const HEADS = [
+  ['alive', 'alive', 8], ['blink', 'blink', 8], ['dead', 'dead', 8], ['peek', 'peek', 4], ['peekBlink', 'peek-blink', 4],
+] as const;
 
 const PICTURES: ReadonlyArray<readonly [rows: readonly string[], color: string, dotted?: boolean]> = [
   [B.BOX, INK], [B.HEART, INK], [B.HEART_EMPTY, INK], [B.SPARK, INK], [B.SWEAT, SOFT], [B.PUFF, SOFT],
@@ -110,14 +116,18 @@ export function SpriteSheetView() {
         <canvas ref={one} style={canvas} />
         <p style={label}>2x sheet, zoom 2. Last row: dead, GHOST, box, hearts, spark, sweat, puff, skill icons, sound.</p>
         <canvas ref={two} style={canvas} />
-        <p style={label}>Leaderboard heads, cut from the 1x sheet, zoom 8: alive, blink, dead.</p>
-        <div style={{ display: 'flex', gap: 32 }}>
+        <p style={label}>
+          Heads, cut from the 1x sheet: alive, blink and dead for the leaderboard (zoom 8), then the peeking head, its
+          blink and the hand under its chin (zoom 4).
+        </p>
+        <div style={{ display: 'flex', alignItems: 'flex-start', gap: 32 }}>
           {heads &&
-            (['alive', 'blink', 'dead'] as const).map((k) => (
-              <div key={k} data-testid={`head-${k}`} data-rows={heads[k].join('|')}>
-                <PixelIcon rows={heads[k]} size={8} />
+            HEADS.map(([k, id, zoom]) => (
+              <div key={k} data-testid={`head-${id}`} data-rows={heads[k].join('|')}>
+                <PixelIcon rows={heads[k]} size={zoom} />
               </div>
             ))}
+          {heads && <PixelIcon rows={mirror(B.HAND)} size={4} />}
         </div>
       </div>
     </div>
