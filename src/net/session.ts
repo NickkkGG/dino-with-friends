@@ -4,6 +4,8 @@ import type {
 import { parseServerMessage } from '../../shared/lobby/protocol';
 import { wsUrl } from './api';
 import { CLOCK_SAMPLES, ClockSync } from './clock';
+import { sessionTokens } from './tokens';
+import type { TokenStore } from './tokens';
 
 /** The part of a WebSocket a session uses, so tests can hand it a fake. */
 export interface SocketLike {
@@ -16,11 +18,24 @@ export interface SocketLike {
   onerror: (() => void) | null;
 }
 
-export type SessionError = 'CANT_CONNECT' | 'LOBBY_NOT_FOUND' | 'LOBBY_FULL' | 'CONNECTION_LOST';
+export type SessionError = 'CANT_CONNECT' | 'LOBBY_NOT_FOUND' | 'LOBBY_FULL' | 'CONNECTION_LOST' | 'VERSION_MISMATCH';
+
+/** How long after a drop a session tries again, and again after each try that fails. */
+export const RETRY_MS = 1000;
+
+/** How long it keeps trying after a drop in a round: the lobby counts a runner out 10 s after their last state. */
+export const ROUND_RETRY_MS = 10_000;
+
+/** How long it keeps trying after a drop outside a round: as long as the lobby keeps the seat. */
+export const LOBBY_RETRY_MS = 120_000;
+
+/** How often a watcher says again whom it watches, for a lobby that has forgotten since, as after a restart. */
+export const WATCH_AGAIN_MS = 5000;
 
 /** Everything the screens show of a lobby, as the server last told it. */
 export interface SessionView {
-  status: 'connecting' | 'joined' | 'failed';
+  /** 'reconnecting': the connection dropped, and the session is trying to get its seat back. */
+  status: 'connecting' | 'joined' | 'reconnecting' | 'failed';
   error: SessionError | null;
   code: string;
   /** This player's id, from the welcome. */
@@ -48,6 +63,8 @@ export interface SessionOptions {
   location?: { protocol: string; host: string };
   /** The build this page says it is, which the lobby server must be too. Default this build. */
   version?: string;
+  /** Where the tab keeps the token of its seat. Default sessionStorage. */
+  tokens?: TokenStore;
 }
 
 const OPEN = 1;
@@ -75,7 +92,8 @@ function browserSocket(url: string): SocketLike {
 
 /**
  * One player's connection to one lobby. It says hello, keeps the server's clock with bursts of pings, and holds what
- * the server last said as a view that only changes when something in it does, for useSyncExternalStore.
+ * the server last said as a view that only changes when something in it does, for useSyncExternalStore. When the
+ * connection drops it tries again every second with the token of its seat, for as long as the lobby keeps the seat.
  */
 export class LobbySession {
   private readonly code: string;
@@ -85,6 +103,7 @@ export class LobbySession {
   private readonly wall: () => number;
   private readonly location: { protocol: string; host: string } | null;
   private readonly version: string;
+  private readonly tokens: TokenStore;
   private readonly clock = new ClockSync();
   private readonly listeners = new Set<() => void>();
   private readonly relayListeners = new Set<(id: string, s: RunState) => void>();
@@ -95,6 +114,12 @@ export class LobbySession {
   private pingOut: number | null = null;
   /** Set once the game itself ends the connection, by leave() or dispose(). */
   private done = false;
+  /** When the connection dropped, by this page's clock, and whether a round was on then; null while it is up. */
+  private away: { at: number; inRound: boolean } | null = null;
+  private retry: ReturnType<typeof setTimeout> | null = null;
+  /** The runner this player watches, said again after each welcome and every WATCH_AGAIN_MS. */
+  private watched: string | null = null;
+  private watchAgain: ReturnType<typeof setInterval> | null = null;
 
   constructor(o: SessionOptions) {
     this.code = o.code;
@@ -104,6 +129,7 @@ export class LobbySession {
     this.wall = o.wall ?? (() => Date.now());
     this.location = o.location ?? null;
     this.version = o.version ?? __BUILD_VERSION__;
+    this.tokens = o.tokens ?? sessionTokens();
     this.current = {
       status: 'connecting', error: null, code: o.code, you: null, players: [], phase: 'lobby', round: 0,
       countdown: null, tower: [], end: null, names: new Map(), watching: [],
@@ -113,12 +139,18 @@ export class LobbySession {
   connect(): void {
     const socket = this.open(wsUrl(this.code, this.location ?? window.location));
     this.socket = socket;
+    this.pingOut = null; // a ping out on a socket that dropped gets no pong
     socket.onopen = () => {
-      this.send({ type: 'hello', v: this.version, name: this.name, token: null });
+      if (socket !== this.socket) return;
+      this.send({ type: 'hello', v: this.version, name: this.name, token: this.tokens.get(this.code) });
       this.pingBurst();
     };
-    socket.onmessage = (e) => this.receive(e.data);
-    socket.onclose = () => this.closed();
+    socket.onmessage = (e) => {
+      if (socket === this.socket) this.receive(e.data);
+    };
+    socket.onclose = () => {
+      if (socket === this.socket) this.closed();
+    };
     socket.onerror = null; // a close always follows
   }
 
@@ -148,9 +180,13 @@ export class LobbySession {
     this.send({ type: 'dead', d });
   }
 
-  /** Asks to watch a runner. */
+  /** Asks to watch a runner, and asks again after each new welcome and every WATCH_AGAIN_MS until the round ends. */
   watch(target: string): void {
+    this.watched = target;
     this.send({ type: 'watch', target });
+    this.watchAgain ??= setInterval(() => {
+      if (this.watched !== null) this.send({ type: 'watch', target: this.watched });
+    }, WATCH_AGAIN_MS);
   }
 
   /** Each relayed state, as it comes; gives back the way to stop. Relays never go through the view. */
@@ -171,6 +207,27 @@ export class LobbySession {
 
   private finish(): void {
     this.done = true;
+    this.stopRetrying();
+    this.stopWatching();
+    this.socket?.close();
+  }
+
+  private stopRetrying(): void {
+    if (this.retry !== null) clearTimeout(this.retry);
+    this.retry = null;
+  }
+
+  private stopWatching(): void {
+    this.watched = null;
+    if (this.watchAgain !== null) clearInterval(this.watchAgain);
+    this.watchAgain = null;
+  }
+
+  /** Over for good: nothing is tried again. */
+  private fail(error: SessionError): void {
+    this.stopRetrying();
+    this.stopWatching();
+    this.update({ status: 'failed', error });
     this.socket?.close();
   }
 
@@ -199,7 +256,10 @@ export class LobbySession {
     if (msg === null) return;
     switch (msg.type) {
       case 'welcome':
+        this.tokens.set(this.code, msg.token);
+        this.away = null;
         this.update({ status: 'joined', you: msg.you });
+        if (this.watched !== null) this.send({ type: 'watch', target: this.watched });
         break;
       case 'lobby': {
         const names = new Map(this.current.names);
@@ -210,7 +270,10 @@ export class LobbySession {
       case 'countdown': {
         const names = new Map(this.current.names);
         for (const r of msg.runners) names.set(r.id, r.name);
-        this.update({ countdown: { round: msg.round, seed: msg.seed, startAt: msg.startAt }, names });
+        // The round already held keeps its object, so a race that comes back after a drop does not start again.
+        const held = this.current.countdown;
+        const same = held !== null && held.round === msg.round && held.seed === msg.seed && held.startAt === msg.startAt;
+        this.update({ countdown: same ? held : { round: msg.round, seed: msg.seed, startAt: msg.startAt }, names });
         this.pingBurst();
         break;
       }
@@ -224,6 +287,7 @@ export class LobbySession {
         this.update({ tower: msg.rows });
         break;
       case 'end':
+        this.stopWatching(); // the lobby has forgotten who watched whom
         this.update({ end: { round: msg.round, results: msg.results } });
         break;
       case 'pong':
@@ -233,9 +297,10 @@ export class LobbySession {
         if (this.pingsLeft > 0) this.ping();
         break;
       case 'error':
-        if (msg.code === 'LOBBY_NOT_FOUND' || msg.code === 'LOBBY_FULL') {
-          this.update({ status: 'failed', error: msg.code });
-          this.socket?.close();
+        if (msg.code === 'LOBBY_NOT_FOUND' || msg.code === 'LOBBY_FULL' || msg.code === 'VERSION_MISMATCH') {
+          this.fail(msg.code);
+        } else if (msg.code === 'REPLACED') {
+          this.fail('CONNECTION_LOST'); // another tab has the seat: trying again would take it back, and so on
         }
         break;
     }
@@ -243,6 +308,33 @@ export class LobbySession {
 
   private closed(): void {
     if (this.done || this.current.status === 'failed') return;
-    this.update({ status: 'failed', error: this.current.you === null ? 'CANT_CONNECT' : 'CONNECTION_LOST' });
+    if (this.current.you === null) {
+      this.fail('CANT_CONNECT');
+      return;
+    }
+    if (this.away === null) {
+      const { phase } = this.current;
+      this.away = { at: this.now(), inRound: phase === 'countdown' || phase === 'playing' };
+      this.update({ status: 'reconnecting' });
+    }
+    this.tryAgainLater();
+  }
+
+  /** A new socket RETRY_MS from now while there is time left, by the clock; CONNECTION LOST once there is none. */
+  private tryAgainLater(): void {
+    if (this.timeUp()) {
+      this.fail('CONNECTION_LOST');
+      return;
+    }
+    this.retry = setTimeout(() => {
+      this.retry = null;
+      if (this.timeUp()) this.fail('CONNECTION_LOST');
+      else this.connect();
+    }, RETRY_MS);
+  }
+
+  private timeUp(): boolean {
+    if (this.away === null) return false;
+    return this.now() - this.away.at >= (this.away.inRound ? ROUND_RETRY_MS : LOBBY_RETRY_MS);
   }
 }

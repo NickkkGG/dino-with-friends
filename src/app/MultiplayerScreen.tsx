@@ -30,6 +30,7 @@ const ERROR_TEXT: Readonly<Record<SessionError, string>> = {
   LOBBY_NOT_FOUND: 'LOBBY NOT FOUND',
   LOBBY_FULL: 'LOBBY IS FULL',
   CONNECTION_LOST: 'CONNECTION LOST',
+  VERSION_MISMATCH: 'NEW VERSION AVAILABLE',
 };
 
 // The letters in the code boxes, in CSS pixels per cell.

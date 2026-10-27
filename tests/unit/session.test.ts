@@ -1,7 +1,10 @@
-import { expect, it } from 'vitest';
-import type { LobbyPlayer, RunState } from '../../shared/lobby/protocol';
-import { LobbySession } from '../../src/net/session';
+import { afterEach, beforeEach, expect, it, vi } from 'vitest';
+import type { LobbyPhase, LobbyPlayer, RunState, ServerMessage } from '../../shared/lobby/protocol';
+import { LobbySession, RETRY_MS, WATCH_AGAIN_MS } from '../../src/net/session';
+import { sessionTokens } from '../../src/net/tokens';
+import type { TokenStore } from '../../src/net/tokens';
 import { fakeSockets } from './helpers/fake-socket';
+import { memoryStorage } from './helpers/fake-storage';
 
 const LAN = { protocol: 'http:', host: 'lan:5173' };
 
@@ -9,16 +12,50 @@ const player = (id: string, name: string, host = false): LobbyPlayer => ({
   id, name, host, connected: true, playing: false,
 });
 
-/** A session on a fake socket and a fake clock, `now` ms on this page and `wall` ms by the date. */
-function setup(name = 'NICK') {
+beforeEach(() => {
+  vi.useFakeTimers();
+});
+
+afterEach(() => {
+  vi.useRealTimers();
+});
+
+/**
+ * A session on fake sockets and a fake clock, `now` ms on this page and `wall` ms by the date, with its seat tokens in
+ * a storage of its own unless it is given some.
+ */
+function setup(name = 'NICK', o: { tokens?: TokenStore } = {}) {
   const fake = fakeSockets();
   const clock = { now: 1000, wall: 1_761_552_000_000 };
+  const storage = memoryStorage();
   const session = new LobbySession({
     code: 'K7RM2Q', name, open: fake.open, now: () => clock.now, wall: () => clock.wall, location: LAN, version: 'v1',
+    tokens: o.tokens ?? sessionTokens(() => storage),
   });
   session.connect();
   return { fake, clock, session };
 }
+
+type Setup = ReturnType<typeof setup>;
+
+/** The page's clock and its timers move on together. */
+function later(s: Setup, ms: number): void {
+  s.clock.now += ms;
+  vi.advanceTimersByTime(ms);
+}
+
+/** A session NICK has joined as p1, with RARA, in phase `o.phase` (default the lobby). */
+function joined(o: { phase?: LobbyPhase } = {}): Setup {
+  const s = setup();
+  s.fake.last.open();
+  s.fake.last.serverSays({ type: 'welcome', you: 'p1', token: 't1', code: 'K7RM2Q' });
+  s.fake.last.serverSays({
+    type: 'lobby', phase: o.phase ?? 'lobby', round: o.phase ? 1 : 0, players: [player('p1', 'NICK', true), player('p2', 'RARA')],
+  });
+  return s;
+}
+
+const watches = (s: Setup) => s.fake.sockets.flatMap((k) => k.sent()).filter((m) => (m as { type: string }).type === 'watch');
 
 /** Answers every ping in flight, as a server whose clock is `offset` ms ahead and a trip of `rtt` ms. */
 function answerPings(s: ReturnType<typeof setup>, offset: number, rtt: number, times: number): void {
@@ -140,14 +177,6 @@ it('cannot connect when the socket closes before the welcome', () => {
   expect(s.session.view()).toMatchObject({ status: 'failed', error: 'CANT_CONNECT' });
 });
 
-it('lost the connection when the socket closes after the welcome', () => {
-  const s = setup();
-  s.fake.last.open();
-  s.fake.last.serverSays({ type: 'welcome', you: 'p1', token: 't1', code: 'K7RM2Q' });
-  s.fake.last.drop();
-  expect(s.session.view()).toMatchObject({ status: 'failed', error: 'CONNECTION_LOST' });
-});
-
 it('leaves without an error', () => {
   const s = setup();
   s.fake.last.open();
@@ -226,4 +255,132 @@ it('takes no notice of a pong for a ping it is not waiting for', () => {
   answerPings(s, 5000, 40, 5);
   for (let i = 0; i < 3; i++) s.fake.last.serverSays({ type: 'pong', c: 1, s: 99_999_999 });
   expect(s.session.serverNow()).toBe(s.clock.now + 5000);
+});
+
+it('says hello with the token of its seat in this lobby, and keeps the new one', () => {
+  const storage = memoryStorage();
+  const tokens = sessionTokens(() => storage);
+  tokens.set('K7RM2Q', 'old');
+  const s = setup('NICK', { tokens });
+  s.fake.last.open();
+  expect(s.fake.last.sent()[0]).toEqual({ type: 'hello', v: 'v1', name: 'NICK', token: 'old' });
+  s.fake.last.serverSays({ type: 'welcome', you: 'p1', token: 'new', code: 'K7RM2Q' });
+  expect(tokens.get('K7RM2Q')).toBe('new');
+});
+
+it('tries again every second while the connection is down, and is back with the same view', () => {
+  const s = joined();
+  const players = s.session.view().players;
+  s.fake.last.drop();
+  expect(s.session.view()).toMatchObject({ status: 'reconnecting', error: null, you: 'p1' });
+  expect(s.session.view().players).toBe(players);
+  later(s, RETRY_MS - 1);
+  expect(s.fake.sockets).toHaveLength(1);
+  later(s, 1);
+  expect(s.fake.sockets).toHaveLength(2);
+  s.fake.last.open();
+  expect(s.fake.last.sent()[0]).toMatchObject({ type: 'hello', token: 't1' });
+  expect(s.fake.last.sent()[1]).toMatchObject({ type: 'ping' }); // the clock is set again on the new socket
+  s.fake.last.serverSays({ type: 'welcome', you: 'p1', token: 't1', code: 'K7RM2Q' });
+  expect(s.session.view().status).toBe('joined');
+});
+
+it('gives up 10 s after a drop in a round, with CONNECTION LOST', () => {
+  const s = joined({ phase: 'playing' });
+  s.fake.last.drop();
+  for (let i = 0; i < 9; i++) {
+    later(s, RETRY_MS);
+    s.fake.last.drop(); // the network is still down
+  }
+  expect(s.session.view().status).toBe('reconnecting');
+  later(s, RETRY_MS);
+  s.fake.last.drop();
+  expect(s.session.view()).toMatchObject({ status: 'failed', error: 'CONNECTION_LOST' });
+  const n = s.fake.sockets.length;
+  later(s, 5 * RETRY_MS);
+  expect(s.fake.sockets).toHaveLength(n);
+});
+
+it('keeps trying for 2 minutes in the lobby', () => {
+  const s = joined();
+  s.fake.last.drop();
+  for (let i = 0; i < 119; i++) {
+    later(s, RETRY_MS);
+    s.fake.last.drop();
+  }
+  expect(s.session.view().status).toBe('reconnecting');
+  later(s, RETRY_MS);
+  expect(s.session.view()).toMatchObject({ status: 'failed', error: 'CONNECTION_LOST' });
+  expect(s.fake.sockets).toHaveLength(120);
+});
+
+it('counts the time away by the clock, so a page whose timers stood still gives up at once', () => {
+  const s = joined();
+  s.fake.last.drop();
+  s.clock.now += 130_000; // the phone slept with the page in the background
+  vi.advanceTimersByTime(RETRY_MS);
+  expect(s.session.view()).toMatchObject({ status: 'failed', error: 'CONNECTION_LOST' });
+  expect(s.fake.sockets).toHaveLength(1);
+});
+
+it('stops for good on VERSION_MISMATCH, REPLACED or LOBBY_NOT_FOUND', () => {
+  const cases = [['VERSION_MISMATCH', 'VERSION_MISMATCH'], ['REPLACED', 'CONNECTION_LOST'], ['LOBBY_NOT_FOUND', 'LOBBY_NOT_FOUND']] as const;
+  for (const [code, error] of cases) {
+    const s = joined();
+    s.fake.last.serverSays({ type: 'error', code });
+    s.fake.last.drop();
+    later(s, 5 * RETRY_MS);
+    expect(s.session.view(), code).toMatchObject({ status: 'failed', error });
+    expect(s.fake.sockets, code).toHaveLength(1);
+  }
+});
+
+it('keeps its countdown for the round it is in when the lobby sends it again', () => {
+  const s = joined();
+  const countdown: Extract<ServerMessage, { type: 'countdown' }> = {
+    type: 'countdown', round: 1, seed: 7, startAt: 5000, runners: [{ id: 'p1', name: 'NICK' }],
+  };
+  s.fake.last.serverSays(countdown);
+  const kept = s.session.view().countdown;
+  s.fake.last.serverSays(countdown);
+  expect(s.session.view().countdown).toBe(kept);
+  s.fake.last.serverSays({ ...countdown, round: 2, startAt: 9000 });
+  expect(s.session.view().countdown).toEqual({ round: 2, seed: 7, startAt: 9000 });
+});
+
+it('says watch again after coming back, and every 5 s', () => {
+  const s = joined({ phase: 'playing' });
+  s.session.watch('p2');
+  expect(watches(s)).toHaveLength(1);
+  later(s, WATCH_AGAIN_MS);
+  expect(watches(s)).toHaveLength(2);
+  s.fake.last.drop();
+  later(s, RETRY_MS);
+  s.fake.last.open();
+  expect(watches(s)).toHaveLength(2);
+  s.fake.last.serverSays({ type: 'welcome', you: 'p1', token: 't1', code: 'K7RM2Q' });
+  expect(watches(s)).toHaveLength(3);
+  expect(s.fake.last.sent().at(-1)).toEqual({ type: 'watch', target: 'p2' });
+});
+
+it('stops its timers when it is left or disposed', () => {
+  const s = joined();
+  s.fake.last.drop();
+  s.session.dispose();
+  expect(vi.getTimerCount()).toBe(0);
+  later(s, 5 * RETRY_MS);
+  expect(s.fake.sockets).toHaveLength(1);
+  const t = joined({ phase: 'playing' });
+  t.session.watch('p2');
+  t.session.leave();
+  expect(vi.getTimerCount()).toBe(0);
+});
+
+it('stops saying watch once the round is over', () => {
+  const s = joined({ phase: 'playing' });
+  s.session.watch('p2');
+  s.fake.last.serverSays({ type: 'end', round: 1, results: [] });
+  later(s, 3 * WATCH_AGAIN_MS);
+  expect(watches(s)).toHaveLength(1);
+  expect(vi.getTimerCount()).toBe(0);
 });

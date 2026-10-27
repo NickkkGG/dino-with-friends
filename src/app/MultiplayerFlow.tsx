@@ -117,7 +117,8 @@ export function MultiplayerFlow({ sprites, sound, testMode, onExit, onScreen }: 
     });
   }, [session]);
 
-  const inLobby = session !== null && view?.status === 'joined';
+  // While the session tries to get its seat back the screens stay as they are, the race going on underneath.
+  const inLobby = session !== null && (view?.status === 'joined' || view?.status === 'reconnecting');
   // The results of a round stay until the player leaves them; one who comes in while they are on goes to the lobby.
   const results = inLobby && view.end !== null && view.end.round > closed ? view.end : null;
   const racing = inLobby && results === null && (view.phase === 'countdown' || view.phase === 'playing');
