@@ -1,5 +1,7 @@
 import { beforeEach, expect, it } from 'vitest';
-import { readFlag, readNumber, setStorageForTests, writeFlag, writeNumber } from '../../src/game/storage';
+import {
+  readFlag, readNumber, readText, setStorageForTests, writeFlag, writeNumber, writeText,
+} from '../../src/game/storage';
 import { memoryStorage } from './helpers/fake-storage';
 
 let store: ReturnType<typeof memoryStorage>;
@@ -58,4 +60,15 @@ it('a write that fails is still read back, and a later one that works wins', () 
   expect(store.getItem('dwf.hi')).toBe('300');
   store.setItem('dwf.hi', '400'); // another tab writes
   expect(readNumber('dwf.hi', 0)).toBe(400);
+});
+
+it('keeps text too, in memory where storage refuses', () => {
+  expect(readText('dwf.name', '')).toBe('');
+  writeText('dwf.name', 'NICK');
+  expect(store.getItem('dwf.name')).toBe('NICK');
+  expect(readText('dwf.name', '')).toBe('NICK');
+  setStorageForTests('throw');
+  expect(readText('dwf.name', 'NONE')).toBe('NONE');
+  writeText('dwf.name', 'RARA');
+  expect(readText('dwf.name', '')).toBe('RARA');
 });

@@ -1,5 +1,5 @@
 import { expect, it } from 'vitest';
-import { HUD_STRIP, SKY, soloLayout, titleLayout } from '../../src/game/layout';
+import { HUD_STRIP, SKY, menuSizes, soloLayout, titleLayout } from '../../src/game/layout';
 import type { TitleLayout } from '../../src/game/layout';
 
 it('laptop 1440×900: wide, full width, world centred', () => {
@@ -85,4 +85,10 @@ it('a short window gets a smaller logo and a narrower track, so the title still 
     expect(titleHeight(t), `${vw}×${vh}`).toBeLessThanOrEqual(vh);
   }
   expect(titleLayout(844, 390).logo).toBe(3.5);
+});
+
+it('sizes the menu text for a phone and a laptop', () => {
+  expect(menuSizes(390)).toEqual({ title: 2.5, body: 2, small: 1.5, code: 5 });
+  expect(menuSizes(1440)).toEqual({ title: 3, body: 2, small: 1.5, code: 6 });
+  expect([menuSizes(599).title, menuSizes(600).title]).toEqual([2.5, 3]);
 });

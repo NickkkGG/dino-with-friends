@@ -16,7 +16,7 @@ const inked = (text: string): number =>
   [...text].reduce((n, ch) => n + GLYPHS[ch]!.rows.join('').split('').filter((c) => c === '#').length, 0);
 
 it('has a glyph for every character the game shows', () => {
-  const listed = [...'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789with :-.,+!?<>/\'←→'];
+  const listed = [...'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789with :-.,+!?<>/\'←→_'];
   for (const ch of listed) expect(GLYPHS[ch], `"${ch}"`).toBeDefined();
   expect(GAME_TEXTS.length).toBeGreaterThan(60);
   for (const text of GAME_TEXTS) for (const ch of text) expect(GLYPHS[ch], `"${ch}" in "${text}"`).toBeDefined();

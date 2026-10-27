@@ -1,4 +1,4 @@
-// Settings and the best score in localStorage, under keys that start with 'dwf.'. Where localStorage is missing or
+// Settings, the best score and the player's name in localStorage, under keys that start with 'dwf.'. Where localStorage is missing or
 // refuses (private browsing, blocked site data, a full quota), the values live in memory for as long as the page is open.
 
 type Backing = Storage | null | 'throw';
@@ -57,6 +57,14 @@ export function readFlag(key: string, fallback: boolean): boolean {
 
 export function writeFlag(key: string, v: boolean): void {
   write(key, v ? '1' : '0');
+}
+
+export function readText(key: string, fallback: string): string {
+  return read(key) ?? fallback;
+}
+
+export function writeText(key: string, v: string): void {
+  write(key, v);
 }
 
 /** Puts a storage in place of localStorage: a Storage, none at all, or one that throws on every use. Memory starts empty. */

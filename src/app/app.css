@@ -207,3 +207,119 @@ body {
 .idle-strip {
   line-height: 0;
 }
+
+/* The menu screens: the way back in the top left, a column in the middle, the idle strip along the bottom. */
+.menu-screen {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.menu-back {
+  position: absolute;
+  top: 4px;
+  left: 4px;
+  z-index: 1;
+}
+
+/* The column's auto margins centre it while there is room, and let it scroll from its top when there is not. */
+.menu-middle {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+}
+
+.menu-column {
+  margin: auto;
+  width: 100%;
+  box-sizing: border-box;
+  padding: 56px 16px 24px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 18px;
+}
+
+.menu-strip {
+  width: 100%;
+  margin: 0 auto;
+  padding: 0 16px;
+  box-sizing: border-box;
+}
+
+.menu-button-wide > button {
+  width: 100%;
+}
+
+.menu-button-narrow > button {
+  min-width: 120px;
+}
+
+.menu-or {
+  align-self: stretch;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.menu-or-line {
+  flex: 1;
+  height: 1px;
+  background: #dcdcdc;
+}
+
+/* A real input over the pixel text of its box, out of sight. */
+.hidden-input {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  opacity: 0;
+  font-size: 16px;
+  cursor: text;
+}
+
+.name-box {
+  position: relative;
+  box-sizing: border-box;
+  height: 44px;
+  padding: 0 10px;
+  border: 2px solid #535353;
+  display: flex;
+  align-items: center;
+  gap: 3px;
+}
+
+.code-boxes {
+  position: relative;
+  display: flex;
+  gap: 6px;
+}
+
+.code-box {
+  box-sizing: border-box;
+  width: 32px;
+  height: 40px;
+  border: 2px solid #535353;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.cursor {
+  line-height: 0;
+}
+
+.mp-error {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+}

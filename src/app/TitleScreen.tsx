@@ -11,22 +11,19 @@ import { PixelText, useDevicePixelRatio } from '../ui/PixelText';
 export interface TitleScreenProps {
   sprites: SpriteSet;
   onSolo(): void;
+  onMultiplayer(): void;
   onCredits(): void;
 }
-
-// How long MULTIPLAYER says COMING SOON.
-const SOON_MS = 1500;
 
 const viewport = () => ({ w: window.innerWidth, h: window.innerHeight });
 
 /** The title: the logo, the dino running by itself across the screen, SOLO, MULTIPLAYER and CREDITS. */
-export function TitleScreen({ sprites, onSolo, onCredits }: TitleScreenProps) {
+export function TitleScreen({ sprites, onSolo, onMultiplayer, onCredits }: TitleScreenProps) {
   const canvas = useRef<HTMLCanvasElement>(null);
   const hiCanvas = useRef<HTMLCanvasElement>(null);
   const demo = useRef<DemoRun | null>(null);
   const [size, setSize] = useState(viewport);
   const [hi] = useState(() => readNumber(HI_KEY, 0));
-  const [soon, setSoon] = useState(false);
   const dpr = useDevicePixelRatio();
   const t = useMemo(() => titleLayout(size.w, size.h), [size]);
 
@@ -54,12 +51,6 @@ export function TitleScreen({ sprites, onSolo, onCredits }: TitleScreenProps) {
     };
   }, []);
 
-  useEffect(() => {
-    if (!soon) return undefined;
-    const id = window.setTimeout(() => setSoon(false), SOON_MS);
-    return () => window.clearTimeout(id);
-  }, [soon]);
-
   return (
     <div data-testid="title-screen" className="title-screen" style={{ gap: t.gap }}>
       <div className="title-logo">
@@ -74,12 +65,7 @@ export function TitleScreen({ sprites, onSolo, onCredits }: TitleScreenProps) {
       </div>
       <div className="title-buttons" style={{ gap: t.buttonGap, width: t.buttonWidth }}>
         <PixelButton label="SOLO" variant="outline" onClick={onSolo} testId="btn-solo" />
-        <PixelButton
-          label={soon ? 'COMING SOON' : 'MULTIPLAYER'}
-          variant="filled"
-          onClick={() => setSoon(true)}
-          testId="btn-multiplayer"
-        />
+        <PixelButton label="MULTIPLAYER" variant="filled" onClick={onMultiplayer} testId="btn-multiplayer" />
       </div>
       <button type="button" className="text-button" data-testid="link-credits" onClick={onCredits}>
         <PixelText text="CREDITS" size={t.small} color={SOFT} />

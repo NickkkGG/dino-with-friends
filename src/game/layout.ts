@@ -114,3 +114,17 @@ export function titleLayout(vw: number, vh: number): TitleLayout {
     small,
   };
 }
+
+/** The pixel text of the menu screens, in CSS pixels per cell. */
+export interface MenuSizes {
+  title: number;
+  body: number;
+  small: number;
+  /** The lobby code. */
+  code: number;
+}
+
+/** The menu text for a window `vw` CSS pixels wide: a little smaller below 600, which is a phone held upright. */
+export function menuSizes(vw: number): MenuSizes {
+  return vw < 600 ? { title: 2.5, body: 2, small: 1.5, code: 5 } : { title: 3, body: 2, small: 1.5, code: 6 };
+}

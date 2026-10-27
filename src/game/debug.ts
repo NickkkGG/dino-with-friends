@@ -1,6 +1,8 @@
 import { boxDigest, courseDigest } from '../../shared/sim/digest';
 import { skillRemaining } from '../../shared/sim/world';
+import type { LobbyPhase } from '../../shared/lobby/protocol';
 import type { Phase, World } from '../../shared/sim/world';
+import type { SessionView } from '../net/session';
 
 // window.__dwf: what the end-to-end tests read from the page in the dev build. Nothing here runs in production.
 
@@ -17,10 +19,23 @@ export interface GameDebug {
   canvas: { width: number; height: number; cssWidth: number; k: number; sprite: 1 | 2 } | null;
 }
 
+/** The lobby this page is in, as the tests see it. */
+export interface LobbyDebug {
+  status: SessionView['status'];
+  code: string;
+  you: string | null;
+  phase: LobbyPhase;
+  round: number;
+  players: number;
+  /** Whether this player is the host. */
+  host: boolean;
+}
+
 export interface DebugState extends GameDebug {
   screen: string;
   hi: number;
   muted: boolean;
+  lobby: LobbyDebug | null;
   courseDigest(seed: number, n: number): string;
   boxDigest(seed: number, playerId: string, n: number): string;
 }
@@ -36,6 +51,7 @@ const NO_GAME: Readonly<GameDebug> = Object.freeze({
 });
 
 let current: (() => GameDebug) | null = null;
+let lobby: (() => LobbyDebug) | null = null;
 
 /** What a world shows the tests, all but the canvas. */
 export function worldDebug(w: World): Omit<GameDebug, 'canvas'> & { skills: NonNullable<GameDebug['skills']> } {
@@ -54,6 +70,14 @@ export function reportGame(f: () => GameDebug): () => void {
   };
 }
 
+/** The lobby the page has joined reports here. The function it gets back stops the report, if it is still this one. */
+export function reportLobby(f: () => LobbyDebug): () => void {
+  lobby = f;
+  return () => {
+    if (lobby === f) lobby = null;
+  };
+}
+
 /** The state of the game on the screen, or nothing when none runs. */
 export function gameDebug(): GameDebug {
   return current?.() ?? NO_GAME;
@@ -61,7 +85,7 @@ export function gameDebug(): GameDebug {
 
 /** Everything window.__dwf holds, on the given screen. */
 export function debugState(screen: string, hi: number, muted: boolean): DebugState {
-  return { screen, ...gameDebug(), hi, muted, courseDigest, boxDigest };
+  return { screen, ...gameDebug(), hi, muted, lobby: lobby?.() ?? null, courseDigest, boxDigest };
 }
 
 /** Puts window.__dwf on the page, read fresh from `get` on every access, in the dev build only. Returns its removal. */

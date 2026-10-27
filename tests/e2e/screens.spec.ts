@@ -81,14 +81,16 @@ test('SOLO opens the solo screen and MENU comes back', async ({ page }, info) =>
   await expect(page.getByText(/^HI \d{5}$/)).toHaveCount(1); // the round just played is the HI now
 });
 
-test('MULTIPLAYER says COMING SOON for 1.5 s', async ({ page }) => {
+test('MULTIPLAYER opens YOUR NAME the first time, and BACK returns', async ({ page }) => {
   await page.goto('/');
   await page.getByTestId('btn-multiplayer').click();
-  await expect(page.getByText('COMING SOON', { exact: true })).toBeVisible();
-  await page.waitForTimeout(1000);
-  await expect(page.getByText('COMING SOON', { exact: true })).toBeVisible();
-  await expect(page.getByText('MULTIPLAYER', { exact: true })).toBeVisible({ timeout: 2000 });
-  expect(await page.evaluate(() => window.__dwf!.screen)).toBe('title');
+  await expect(page.getByTestId('name-screen')).toBeVisible();
+  for (const text of ['< BACK', 'YOUR NAME', 'UP TO 10 LETTERS OR NUMBERS', 'OK']) {
+    await expect(page.getByText(text, { exact: true })).toBeVisible();
+  }
+  expect(await page.evaluate(() => window.__dwf!.screen)).toBe('name');
+  await page.getByTestId('btn-back').click();
+  await expect(page.getByTestId('title-screen')).toBeVisible();
 });
 
 test('CREDITS shows the full Chromium license and BACK returns', async ({ page }) => {

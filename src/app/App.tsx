@@ -12,13 +12,14 @@ import { CreditsScreen } from './CreditsScreen';
 import { GlyphSheetView } from './dev/GlyphSheetView';
 import { SceneView } from './dev/SceneView';
 import { SpriteSheetView } from './dev/SpriteSheetView';
+import { MultiplayerFlow } from './MultiplayerFlow';
 import { MuteButton } from './MuteButton';
 import { SoloScreen } from './SoloScreen';
 import { TitleScreen } from './TitleScreen';
 
 export const GAME_TITLE = 'DINO with FRIENDS';
 
-type Screen = 'title' | 'solo' | 'credits';
+type Screen = 'title' | 'solo' | 'credits' | 'multiplayer';
 
 // In dev, ?view=<name> opens a page for checking the drawing by eye instead of the game.
 function devPage(view: string | null) {
@@ -42,7 +43,7 @@ function useUnlockSound(sound: Sound): void {
 }
 
 // window.__dwf for the browser tests, on every screen of the dev build.
-function useDebugHook(screen: Screen, sound: Sound): void {
+function useDebugHook(screen: string, sound: Sound): void {
   const current = useRef(screen);
   useEffect(() => {
     current.current = screen;
@@ -56,13 +57,15 @@ function useDebugHook(screen: Screen, sound: Sound): void {
 // The game: the sprites and the sound, loaded once, and the screen on show.
 function Game({ first }: { first: Screen }) {
   const [screen, setScreen] = useState<Screen>(first);
+  // Which of its screens the multiplayer flow shows: name, multiplayer or lobby.
+  const [flowScreen, setFlowScreen] = useState('multiplayer');
   const [sprites, setSprites] = useState<SpriteSet | null>(null);
   const [sound] = useState(() => new Sound(SOUND_URLS));
   const [testMode] = useState<TestMode>(() =>
     import.meta.env.DEV ? parseTestMode(window.location.search, true) : { ...NO_TEST_MODE },
   );
   useUnlockSound(sound);
-  useDebugHook(screen, sound);
+  useDebugHook(screen === 'multiplayer' ? flowScreen : screen, sound);
 
   useEffect(() => {
     let live = true;
@@ -76,14 +79,24 @@ function Game({ first }: { first: Screen }) {
 
   if (!sprites) return null;
   const toTitle = () => setScreen('title');
-  // SOLO has its own speaker, inside the part of the screen that turns over at night.
+  // SOLO has its own speaker, inside the part of the screen that turns over at night, and so do the multiplayer screens.
   if (screen === 'solo') return <SoloScreen sprites={sprites} sound={sound} testMode={testMode} onMenu={toTitle} />;
+  if (screen === 'multiplayer') {
+    return (
+      <MultiplayerFlow sprites={sprites} sound={sound} testMode={testMode} onExit={toTitle} onScreen={setFlowScreen} />
+    );
+  }
   return (
     <>
       {screen === 'credits' ? (
         <CreditsScreen sprites={sprites} onBack={toTitle} />
       ) : (
-        <TitleScreen sprites={sprites} onSolo={() => setScreen('solo')} onCredits={() => setScreen('credits')} />
+        <TitleScreen
+          sprites={sprites}
+          onSolo={() => setScreen('solo')}
+          onMultiplayer={() => setScreen('multiplayer')}
+          onCredits={() => setScreen('credits')}
+        />
       )}
       <MuteButton sound={sound} />
     </>
