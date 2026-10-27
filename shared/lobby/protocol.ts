@@ -7,7 +7,7 @@ export type LobbyPhase = 'lobby' | 'countdown' | 'playing' | 'results';
 /** What the dino is doing, for drawing it on someone else's screen. */
 export type Pose = 'run' | 'duck' | 'jump';
 
-export type ErrorCode = 'LOBBY_NOT_FOUND' | 'LOBBY_FULL' | 'VERSION_MISMATCH' | 'NOT_HOST' | 'BAD_MESSAGE';
+export type ErrorCode = 'LOBBY_NOT_FOUND' | 'LOBBY_FULL' | 'VERSION_MISMATCH' | 'NOT_HOST' | 'BAD_MESSAGE' | 'REPLACED';
 
 /** The ms each skill has left. */
 export interface Fx {
@@ -51,7 +51,8 @@ export interface RunState {
 }
 
 export type ClientMessage =
-  | { type: 'hello'; name: string }
+  /** `v`: the page's build. `token`: the seat this tab had in the lobby, to have it back; null for a new one. */
+  | { type: 'hello'; v: string; name: string; token: string | null }
   | { type: 'start' }
   | ({ type: 'state' } & RunState)
   | { type: 'dead'; d: number }
@@ -83,7 +84,8 @@ export interface ResultRow {
 }
 
 export type ServerMessage =
-  | { type: 'welcome'; you: string; code: string }
+  /** `token` gives the seat back to a new connection of this tab. */
+  | { type: 'welcome'; you: string; token: string; code: string }
   | { type: 'lobby'; players: LobbyPlayer[]; phase: LobbyPhase; round: number }
   | { type: 'countdown'; round: number; seed: number; startAt: number }
   | { type: 'tower'; rows: TowerRow[] }
@@ -96,6 +98,8 @@ export const MAX_CLIENT_CHARS = 1024;
 
 // What a player's message may hold. The name is cut to its real length later, when the lobby cleans it.
 const HELLO_NAME_CHARS = 64;
+const VERSION_CHARS = 32;
+const TOKEN_CHARS = 64;
 const T_MAX = 3_600_000;
 const D_MAX = 1e9;
 const Y_LIMIT = 1000;
@@ -154,6 +158,7 @@ const isErrorCode = oneOf<ErrorCode>({
   VERSION_MISMATCH: true,
   NOT_HOST: true,
   BAD_MESSAGE: true,
+  REPLACED: true,
 });
 
 /** Every item of a list read by `read`, or null when it is not a list or any item is wrong. */
@@ -240,8 +245,13 @@ export function parseClientMessage(raw: unknown): ClientMessage | null {
   if (m === null) return null;
   switch (m.type) {
     case 'hello': {
-      const { name } = m;
-      return typeof name === 'string' && name.length <= HELLO_NAME_CHARS ? { type: 'hello', name } : null;
+      // A page from before builds were checked sends no v, and so reads as another build.
+      const { name, v = '', token = null } = m;
+      const tokenOk = token === null || (typeof token === 'string' && token.length >= 1 && token.length <= TOKEN_CHARS);
+      return typeof name === 'string' && name.length <= HELLO_NAME_CHARS && typeof v === 'string' &&
+        v.length <= VERSION_CHARS && tokenOk
+        ? { type: 'hello', v, name, token }
+        : null;
     }
     case 'start':
       return { type: 'start' };
@@ -298,8 +308,10 @@ export function parseServerMessage(raw: unknown): ServerMessage | null {
   if (m === null) return null;
   switch (m.type) {
     case 'welcome': {
-      const { you, code } = m;
-      return typeof you === 'string' && typeof code === 'string' ? { type: 'welcome', you, code } : null;
+      const { you, token, code } = m;
+      return typeof you === 'string' && typeof token === 'string' && typeof code === 'string'
+        ? { type: 'welcome', you, token, code }
+        : null;
     }
     case 'lobby': {
       const { phase, round } = m;

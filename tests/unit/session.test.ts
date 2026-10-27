@@ -14,7 +14,7 @@ function setup(name = 'NICK') {
   const fake = fakeSockets();
   const clock = { now: 1000, wall: 1_761_552_000_000 };
   const session = new LobbySession({
-    code: 'K7RM2Q', name, open: fake.open, now: () => clock.now, wall: () => clock.wall, location: LAN,
+    code: 'K7RM2Q', name, open: fake.open, now: () => clock.now, wall: () => clock.wall, location: LAN, version: 'v1',
   });
   session.connect();
   return { fake, clock, session };
@@ -36,7 +36,7 @@ it('says hello with the name, then pings five times in a row', () => {
   expect(s.fake.last.url).toBe('ws://lan:5173/ws/K7RM2Q');
   expect(s.fake.last.sent()).toEqual([]);
   s.fake.last.open();
-  expect(s.fake.last.sent()).toEqual([{ type: 'hello', name: 'NICK' }, { type: 'ping', c: 1000 }]);
+  expect(s.fake.last.sent()).toEqual([{ type: 'hello', v: 'v1', name: 'NICK', token: null }, { type: 'ping', c: 1000 }]);
   answerPings(s, 0, 40, 1);
   expect(pings(s)).toHaveLength(2);
   answerPings(s, 0, 40, 10);
@@ -54,7 +54,7 @@ it('joins on welcome and follows the lobby', () => {
   const s = setup('RARA');
   s.fake.last.open();
   expect(s.session.view()).toMatchObject({ status: 'connecting', you: null, code: 'K7RM2Q' });
-  s.fake.last.serverSays({ type: 'welcome', you: 'p2', code: 'K7RM2Q' });
+  s.fake.last.serverSays({ type: 'welcome', you: 'p2', token: 't2', code: 'K7RM2Q' });
   s.fake.last.serverSays({
     type: 'lobby', phase: 'lobby', round: 0, players: [player('p1', 'NICK', true), player('p2', 'RARA')],
   });
@@ -143,7 +143,7 @@ it('cannot connect when the socket closes before the welcome', () => {
 it('lost the connection when the socket closes after the welcome', () => {
   const s = setup();
   s.fake.last.open();
-  s.fake.last.serverSays({ type: 'welcome', you: 'p1', code: 'K7RM2Q' });
+  s.fake.last.serverSays({ type: 'welcome', you: 'p1', token: 't1', code: 'K7RM2Q' });
   s.fake.last.drop();
   expect(s.session.view()).toMatchObject({ status: 'failed', error: 'CONNECTION_LOST' });
 });
@@ -151,7 +151,7 @@ it('lost the connection when the socket closes after the welcome', () => {
 it('leaves without an error', () => {
   const s = setup();
   s.fake.last.open();
-  s.fake.last.serverSays({ type: 'welcome', you: 'p1', code: 'K7RM2Q' });
+  s.fake.last.serverSays({ type: 'welcome', you: 'p1', token: 't1', code: 'K7RM2Q' });
   s.session.leave();
   expect(s.fake.last.sent().at(-1)).toEqual({ type: 'leave' });
   expect(s.fake.last.closedByGame).toBe(true);

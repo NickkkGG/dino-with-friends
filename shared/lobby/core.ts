@@ -52,6 +52,20 @@ export function alarmToSet(set: number | null, wakeAt: number | null): number | 
   return wakeAt !== null && (set === null || wakeAt < set) ? wakeAt : null;
 }
 
+/** What a lobby is made with. */
+export interface LobbyOptions {
+  code: string;
+  /** A random 32-bit whole number for each round's seed. */
+  seeds: () => number;
+  /** A new secret for each seat, which gives the seat back to a new connection. */
+  tokens: () => string;
+  /** The build this lobby runs: a hello from any other is turned away. */
+  version: string;
+  /** When the lobby is made. */
+  now: number;
+}
+
+/** A seat in the lobby. It outlives its connection: a player whose socket drops comes back to it with its token. */
 export interface SavedPlayer {
   id: string;
   conn: string;
@@ -59,6 +73,10 @@ export interface SavedPlayer {
   joinOrder: number;
   host: boolean;
   playing: boolean;
+  token: string;
+  connected: boolean;
+  /** When the connection dropped; null while it is open. */
+  awaySince: number | null;
 }
 
 /** A player in the round, under the name they had at START. */
@@ -99,6 +117,8 @@ interface Runner extends SavedRunner {
 export class LobbyCore {
   readonly code: string;
   private readonly seeds: () => number;
+  private readonly tokens: () => string;
+  private readonly version: string;
   private nextJoin = 1;
   private round = 0;
   private phase: LobbyPhase = 'lobby';
@@ -115,22 +135,30 @@ export class LobbyCore {
   private out: Send[] = [];
   private toClose: string[] = [];
 
-  /** `seeds` gives a random 32-bit whole number for each round's seed. */
-  constructor(code: string, seeds: () => number) {
-    this.code = code;
-    this.seeds = seeds;
+  constructor(o: LobbyOptions) {
+    this.code = o.code;
+    this.seeds = o.seeds;
+    this.tokens = o.tokens;
+    this.version = o.version;
   }
 
-  /** The lobby `saved` was taken from, woken at `now`. */
-  static restore(saved: SavedLobby, seeds: () => number, now: number): LobbyCore {
-    const core = new LobbyCore(saved.code, seeds);
+  /**
+   * The lobby `saved` was taken from, woken at `now`. `open`: the connections whose sockets are still open; every
+   * other seat is away from `now` on, unless it was away already.
+   */
+  static restore(saved: SavedLobby, o: Omit<LobbyOptions, 'code' | 'now'>, now: number, open: ReadonlySet<string>): LobbyCore {
+    const core = new LobbyCore({ ...o, code: saved.code, now });
     core.nextJoin = saved.nextJoin;
     core.round = saved.round;
     core.phase = saved.phase;
     core.seed = saved.seed;
     core.startAt = saved.startAt;
     core.endsAt = saved.endsAt;
-    core.players = saved.players.map((p) => ({ ...p }));
+    core.players = saved.players.map((p) => {
+      if (open.has(p.conn) || !p.connected) return { ...p };
+      core.dirty = true;
+      return { ...p, connected: false, awaySince: now };
+    });
     core.runners = saved.runners.map((r) => ({ ...r, t: 0, lastStateAt: Math.max(now, saved.startAt) }));
     core.results = saved.results.map((r) => ({ ...r }));
     return core;
@@ -148,7 +176,7 @@ export class LobbyCore {
         this.sendTo(ev.conn, { type: 'error', code: 'BAD_MESSAGE' });
         break;
       case 'close':
-        this.remove(ev.conn, now);
+        this.drop(ev.conn, now);
         break;
       case 'alarm':
         this.onAlarm(now);
@@ -196,7 +224,7 @@ export class LobbyCore {
         this.sendTo(conn, { type: 'pong', c: msg.c, s: now });
         break;
       case 'hello':
-        this.join(conn, msg.name);
+        this.join(conn, msg);
         break;
       case 'leave':
         this.toClose.push(conn);
@@ -214,9 +242,19 @@ export class LobbyCore {
     }
   }
 
-  private join(conn: string, name: string): void {
+  private join(conn: string, hello: Extract<ClientMessage, { type: 'hello' }>): void {
     if (this.playerOn(conn)) return;
-    const clean = cleanName(name);
+    if (hello.v !== this.version) {
+      this.sendTo(conn, { type: 'error', code: 'VERSION_MISMATCH' });
+      this.toClose.push(conn);
+      return;
+    }
+    const seat = hello.token === null ? undefined : this.players.find((p) => p.token === hello.token);
+    if (seat) {
+      this.takeBack(seat, conn);
+      return;
+    }
+    const clean = cleanName(hello.name);
     if (clean === '') {
       this.sendTo(conn, { type: 'error', code: 'BAD_MESSAGE' });
       return;
@@ -234,25 +272,63 @@ export class LobbyCore {
       joinOrder,
       host: !this.players.some((p) => p.host),
       playing: false,
+      token: this.tokens(),
+      connected: true,
+      awaySince: null,
     };
     this.players.push(player);
     this.dirty = true;
-    this.sendTo(conn, { type: 'welcome', you: player.id, code: this.code });
-    this.sendLobby();
-    if (this.phase !== 'lobby') this.sendTo(conn, this.tower());
+    this.welcome(player);
   }
 
-  /** A player leaving. One who is in the round is out with the distance they had, and stays on the board. */
+  // A seat back on a new connection, by its token. A connection still open on it is told and closed: the tab came
+  // back before its old socket's close got here, or a copy of the tab has taken the seat.
+  private takeBack(seat: SavedPlayer, conn: string): void {
+    if (seat.connected) {
+      this.sendTo(seat.conn, { type: 'error', code: 'REPLACED' });
+      this.toClose.push(seat.conn);
+    }
+    seat.conn = conn;
+    seat.connected = true;
+    seat.awaySince = null;
+    this.dirty = true;
+    this.welcome(seat);
+  }
+
+  /** What a player coming in is sent: the welcome, the lobby (to everyone), and the round on, if there is one. */
+  private welcome(p: SavedPlayer): void {
+    this.sendTo(p.conn, { type: 'welcome', you: p.id, token: p.token, code: this.code });
+    this.sendLobby();
+    if (this.inRound()) this.sendTo(p.conn, this.countdown());
+    if (this.phase !== 'lobby') this.sendTo(p.conn, this.tower());
+  }
+
+  /** A connection that closed. Its seat stays, away, for its player to come back to, and so does a place in the round. */
+  private drop(conn: string, now: number): void {
+    const seat = this.playerOn(conn);
+    if (!seat?.connected) return;
+    seat.connected = false;
+    seat.awaySince = now;
+    this.dirty = true;
+    this.sendLobby();
+  }
+
+  /** A player who leaves by LEAVE. One who is in the round is out with the distance they had, and stays on the board. */
   private remove(conn: string, now: number): void {
     const gone = this.playerOn(conn);
     if (!gone) return;
     const runner = this.aliveRunnerOn(conn);
     this.players = this.players.filter((p) => p !== gone);
-    const next = this.players[0];
-    if (gone.host && next) next.host = true;
+    if (gone.host) this.handHost();
     this.dirty = true;
     this.sendLobby();
     if (runner && this.inRound()) this.knockOut(runner, now);
+  }
+
+  /** The host's seat is gone: the seat that came in earliest hosts now, the earliest connected one first. */
+  private handHost(): void {
+    const next = this.players.find((p) => p.connected) ?? this.players[0];
+    if (next) next.host = true;
   }
 
   private start(conn: string, now: number): void {
@@ -262,13 +338,15 @@ export class LobbyCore {
       this.sendTo(conn, { type: 'error', code: 'NOT_HOST' });
       return;
     }
-    if (this.phase !== 'lobby' || this.players.length < MIN_PLAYERS) return;
+    // A seat whose player is away keeps its place in the lobby, but the round goes without it.
+    const ready = this.players.filter((p) => p.connected);
+    if (this.phase !== 'lobby' || ready.length < MIN_PLAYERS) return;
     this.round += 1;
     this.seed = this.seeds() >>> 0;
     this.startAt = now + COUNTDOWN_MS;
     this.phase = 'countdown';
-    for (const p of this.players) p.playing = true;
-    this.runners = this.players.map((p) => ({
+    for (const p of this.players) p.playing = p.connected;
+    this.runners = ready.map((p) => ({
       id: p.id,
       name: p.name,
       joinOrder: p.joinOrder,
@@ -281,7 +359,7 @@ export class LobbyCore {
     }));
     this.results = [];
     this.dirty = true;
-    this.broadcast({ type: 'countdown', round: this.round, seed: this.seed, startAt: this.startAt });
+    this.broadcast(this.countdown());
     this.sendLobby();
     this.sendTower(now);
   }
@@ -380,6 +458,10 @@ export class LobbyCore {
     return this.runners.map((r) => ({ ...r, score: scoreOf(r.d) }));
   }
 
+  private countdown(): ServerMessage {
+    return { type: 'countdown', round: this.round, seed: this.seed, startAt: this.startAt };
+  }
+
   private tower(): ServerMessage {
     const rows = rankStandings(this.standings()).map(({ id, score, hp, alive }) => ({ id, score, hp, alive }));
     return { type: 'tower', rows };
@@ -391,19 +473,19 @@ export class LobbyCore {
   }
 
   private sendLobby(): void {
-    // A player whose socket closes leaves, so everyone still on the list is connected.
-    const players: LobbyPlayer[] = this.players.map(({ id, name, host, playing }) => ({
+    const players: LobbyPlayer[] = this.players.map(({ id, name, host, connected, playing }) => ({
       id,
       name,
       host,
-      connected: true,
+      connected,
       playing,
     }));
     this.broadcast({ type: 'lobby', players, phase: this.phase, round: this.round });
   }
 
+  /** To every seat whose player is connected. */
   private broadcast(msg: ServerMessage): void {
-    for (const p of this.players) this.out.push({ to: p.conn, msg });
+    for (const p of this.players) if (p.connected) this.out.push({ to: p.conn, msg });
   }
 
   private sendTo(conn: string, msg: ServerMessage): void {

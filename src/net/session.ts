@@ -44,6 +44,8 @@ export interface SessionOptions {
   /** The date's clock, for before the first pong. */
   wall?: () => number;
   location?: { protocol: string; host: string };
+  /** The build this page says it is, which the lobby server must be too. Default this build. */
+  version?: string;
 }
 
 const OPEN = 1;
@@ -80,6 +82,7 @@ export class LobbySession {
   private readonly now: () => number;
   private readonly wall: () => number;
   private readonly location: { protocol: string; host: string } | null;
+  private readonly version: string;
   private readonly clock = new ClockSync();
   private readonly listeners = new Set<() => void>();
   private socket: SocketLike | null = null;
@@ -97,6 +100,7 @@ export class LobbySession {
     this.now = o.now ?? (() => performance.now());
     this.wall = o.wall ?? (() => Date.now());
     this.location = o.location ?? null;
+    this.version = o.version ?? __BUILD_VERSION__;
     this.current = {
       status: 'connecting', error: null, code: o.code, you: null, players: [], phase: 'lobby', round: 0,
       countdown: null, tower: [], end: null, names: new Map(),
@@ -107,7 +111,7 @@ export class LobbySession {
     const socket = this.open(wsUrl(this.code, this.location ?? window.location));
     this.socket = socket;
     socket.onopen = () => {
-      this.send({ type: 'hello', name: this.name });
+      this.send({ type: 'hello', v: this.version, name: this.name, token: null });
       this.pingBurst();
     };
     socket.onmessage = (e) => this.receive(e.data);

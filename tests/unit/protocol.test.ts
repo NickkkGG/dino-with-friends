@@ -16,7 +16,7 @@ const RUN: RunState = {
 
 it('reads every client message and keeps only its own fields', () => {
   const read = (m: object) => parseClientMessage(JSON.stringify({ ...m, extra: 'x' }));
-  expect(read({ type: 'hello', name: 'nick' })).toEqual({ type: 'hello', name: 'nick' });
+  expect(read({ type: 'hello', v: 'm4x2', name: 'nick', token: 'abc' })).toEqual({ type: 'hello', v: 'm4x2', name: 'nick', token: 'abc' });
   expect(read({ type: 'start' })).toEqual({ type: 'start' });
   expect(read({ ...STATE, fx: { ...STATE.fx, extra: 1 } })).toEqual(STATE);
   expect(read({ type: 'dead', d: 1234.5 })).toEqual({ type: 'dead', d: 1234.5 });
@@ -40,6 +40,17 @@ it('turns away what is not a client message', () => {
   expect(parseClientMessage(undefined)).toBeNull();
 });
 
+it('reads a hello with the build, the name and the token', () => {
+  expect(parseClientMessage('{"type":"hello","v":"m4x2","name":"nick","token":"abc"}'))
+    .toEqual({ type: 'hello', v: 'm4x2', name: 'nick', token: 'abc' });
+  expect(parseClientMessage('{"type":"hello","v":"m4x2","name":"nick"}')).toMatchObject({ token: null });
+  expect(parseClientMessage('{"type":"hello","name":"nick"}')).toMatchObject({ v: '', token: null });
+  expect(parseClientMessage(`{"type":"hello","v":"m4x2","name":"nick","token":"${'a'.repeat(65)}"}`)).toBeNull();
+  expect(parseClientMessage(`{"type":"hello","v":"${'a'.repeat(33)}","name":"nick"}`)).toBeNull();
+  expect(parseServerMessage('{"type":"welcome","you":"p2","code":"K7RM2Q"}')).toBeNull();
+  expect(parseServerMessage('{"type":"error","code":"REPLACED"}')).toEqual({ type: 'error', code: 'REPLACED' });
+});
+
 it('reads a whole state, and keeps only its own fields', () => {
   expect(parseClientMessage(JSON.stringify({ type: 'state', ...RUN, extra: 1 }))).toEqual({ type: 'state', ...RUN });
   const plain = { ...RUN, birds: [], hit: null, skill: null };
@@ -57,7 +68,7 @@ it('turns away a state whose new parts are wrong', () => {
 
 it('reads every server message', () => {
   const messages = [
-    { type: 'welcome', you: 'p1', code: 'K7RM2Q' },
+    { type: 'welcome', you: 'p1', token: '8f1c2e7a-3b4d-4c5e-9f60-718293a4b5c6', code: 'K7RM2Q' },
     {
       type: 'lobby', phase: 'countdown', round: 1,
       players: [{ id: 'p1', name: 'NICK', host: true, connected: true, playing: true }],

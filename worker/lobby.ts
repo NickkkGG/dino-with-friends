@@ -10,6 +10,9 @@ const STORAGE_KEY = 'lobby';
 /** A random 32-bit whole number, for a round's seed. */
 const seeds = (): number => crypto.getRandomValues(new Uint32Array(1))[0]!;
 
+/** A new secret for a seat. */
+const tokens = (): string => crypto.randomUUID();
+
 /** The id a socket was given when it came in, kept on the socket so it survives the object sleeping. */
 function connOf(ws: WebSocket): string {
   const attachment: unknown = ws.deserializeAttachment();
@@ -30,14 +33,16 @@ export class Lobby extends DurableObject<Env> {
     void ctx.blockConcurrencyWhile(async () => {
       const saved = await ctx.storage.get<SavedLobby>(STORAGE_KEY);
       this.alarmAt = await ctx.storage.getAlarm();
-      if (saved) this.core = LobbyCore.restore(saved, seeds, Date.now());
+      // A deploy or a restart ends every socket without a close event: the seats whose sockets are gone are away now.
+      const open = new Set(ctx.getWebSockets().map(connOf));
+      if (saved) this.core = LobbyCore.restore(saved, { seeds, tokens, version: __BUILD_VERSION__ }, Date.now(), open);
     });
   }
 
   /** Makes this the lobby `code`, unless it is a lobby already. */
   async create(code: string): Promise<boolean> {
     if (this.core) return false;
-    this.core = new LobbyCore(code, seeds);
+    this.core = new LobbyCore({ code, seeds, tokens, version: __BUILD_VERSION__, now: Date.now() });
     await this.ctx.storage.put(STORAGE_KEY, this.core.saved());
     return true;
   }

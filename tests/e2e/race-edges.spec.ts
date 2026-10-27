@@ -46,7 +46,7 @@ test('LOBBY IS FULL for the ninth player', async ({ page, browser }) => {
     const kept: WebSocket[] = [];
     for (let i = 0; i < 7; i++) {
       const ws = new WebSocket(`${scheme}://${location.host}/ws/${c}`);
-      ws.onopen = () => ws.send(JSON.stringify({ type: 'hello', name: `BOT${i}` }));
+      ws.onopen = () => ws.send(JSON.stringify({ type: 'hello', v: window.__dwf!.version, name: `BOT${i}`, token: null }));
       kept.push(ws);
     }
     (window as unknown as { kept: WebSocket[] }).kept = kept;
@@ -92,7 +92,7 @@ test('a race nobody sends to any more ends 10 s later, by the server alone', asy
   await rara!.context().close();
 });
 
-test('the host leaving mid-race hands the lobby on', async ({ page, browser }) => {
+test('a host who closes the page mid-race is out 10 s later, and keeps the seat', async ({ page, browser }) => {
   test.setTimeout(90_000);
   const rara = await openPlayer(browser, { name: 'RARA', query: BOT });
   const code = await createLobby(rara);
@@ -106,9 +106,12 @@ test('the host leaving mid-race hands the lobby on', async ({ page, browser }) =
   await expect(rara.getByTestId('btn-leave')).toHaveCount(0);
   await rara.context().close();
   await expect(page.getByTestId('results-screen')).toBeVisible({ timeout: 30_000 });
+  await expect(page.getByTestId('winner')).toHaveText('NICK WINS!');
   await expect(page.getByTestId('lobby-screen')).toBeVisible({ timeout: 10_000 });
-  await expect(page.locator('[data-testid="player-row"][data-player-id="p2"]')).toHaveAttribute('data-host', 'true');
-  await expect(page.getByTestId('btn-start')).toHaveText('NEED 2 PLAYERS');
+  // The seat waits 2 minutes for its player to come back, and is still the host meanwhile.
+  await expect(page.getByTestId('players-count')).toHaveText('PLAYERS 2/8');
+  await expect(page.locator('[data-testid="player-row"][data-player-id="p1"]')).toHaveAttribute('data-host', 'true');
+  await expect(page.getByTestId('waiting-host')).toHaveText('WAITING FOR HOST...');
 });
 
 for (const size of [{ width: 1440, height: 900 }, { width: 390, height: 844 }, { width: 844, height: 390 }]) {

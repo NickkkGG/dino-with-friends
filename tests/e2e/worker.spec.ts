@@ -56,8 +56,9 @@ test('a lobby address wants a WebSocket and a real code', async ({ request }) =>
 test('a lobby welcomes a player over a WebSocket and answers a ping', async ({ page, request }) => {
   const { code } = (await (await request.post('/api/lobby')).json()) as { code: string };
   await page.goto('/');
-  const got = await talk(page, code, [{ type: 'hello', name: 'nick' }, { type: 'ping', c: 1 }], 'pong');
-  expect(got.messages[0]).toEqual({ type: 'welcome', you: 'p1', code });
+  const v = await page.evaluate(() => window.__dwf!.version);
+  const got = await talk(page, code, [{ type: 'hello', v, name: 'nick', token: null }, { type: 'ping', c: 1 }], 'pong');
+  expect(got.messages[0]).toEqual({ type: 'welcome', you: 'p1', token: expect.stringMatching(/^[0-9a-f-]{36}$/), code });
   expect(got.messages[1]).toEqual({
     type: 'lobby', phase: 'lobby', round: 0,
     players: [{ id: 'p1', name: 'NICK', host: true, connected: true, playing: false }],
@@ -65,6 +66,25 @@ test('a lobby welcomes a player over a WebSocket and answers a ping', async ({ p
   const pong = got.messages[2] as { type: string; c: number; s: number };
   expect(pong).toMatchObject({ type: 'pong', c: 1 });
   expect(Math.abs(pong.s - got.now)).toBeLessThan(5000);
+});
+
+test('a hello from another build is told VERSION_MISMATCH and closed', async ({ page, request }) => {
+  const { code } = (await (await request.post('/api/lobby')).json()) as { code: string };
+  await page.goto('/');
+  const got = await talk(page, code, [{ type: 'hello', v: 'old', name: 'nick', token: null }], 'never');
+  expect(got.messages).toEqual([{ type: 'error', code: 'VERSION_MISMATCH' }]);
+  expect(got.closeCode).toBe(1000);
+});
+
+test('a token brings the same seat back on a new socket', async ({ page, request }) => {
+  const { code } = (await (await request.post('/api/lobby')).json()) as { code: string };
+  await page.goto('/');
+  const v = await page.evaluate(() => window.__dwf!.version);
+  const first = await talk(page, code, [{ type: 'hello', v, name: 'nick', token: null }], 'welcome'); // closes after it
+  const { token } = first.messages[0] as { token: string };
+  const again = await talk(page, code, [{ type: 'hello', v, name: 'nick', token }], 'lobby');
+  expect(again.messages[0]).toEqual({ type: 'welcome', you: 'p1', token, code });
+  expect(again.messages[1]).toMatchObject({ players: [{ id: 'p1', connected: true }] });
 });
 
 test('a code nobody made says LOBBY_NOT_FOUND and closes', async ({ page }) => {

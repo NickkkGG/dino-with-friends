@@ -38,6 +38,8 @@ export interface DebugState extends GameDebug {
   screen: string;
   hi: number;
   muted: boolean;
+  /** This page's build, which a hello to the lobby server must carry. */
+  version: string;
   lobby: LobbyDebug | null;
   courseDigest(seed: number, n: number): string;
   boxDigest(seed: number, playerId: string, n: number): string;
@@ -88,7 +90,7 @@ export function gameDebug(): GameDebug {
 
 /** Everything window.__dwf holds, on the given screen. */
 export function debugState(screen: string, hi: number, muted: boolean): DebugState {
-  return { screen, ...gameDebug(), hi, muted, lobby: lobby?.() ?? null, courseDigest, boxDigest };
+  return { screen, ...gameDebug(), hi, muted, version: __BUILD_VERSION__, lobby: lobby?.() ?? null, courseDigest, boxDigest };
 }
 
 /** Puts window.__dwf on the page, read fresh from `get` on every access, in the dev build only. Returns its removal. */

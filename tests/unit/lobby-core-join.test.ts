@@ -1,12 +1,12 @@
 import { expect, it } from 'vitest';
 import { LobbyCore } from '../../shared/lobby/core';
 import type { LobbyEvent } from '../../shared/lobby/core';
-import { lobbyHarness } from './helpers/lobby-harness';
+import { VERSION, lobbyHarness } from './helpers/lobby-harness';
 
 it('welcomes the first player as host', () => {
   const h = lobbyHarness();
   h.hello('c1', 'nick');
-  expect(h.last('c1', 'welcome')).toEqual({ type: 'welcome', you: 'p1', code: 'K7RM2Q' });
+  expect(h.last('c1', 'welcome')).toEqual({ type: 'welcome', you: 'p1', token: 't1', code: 'K7RM2Q' });
   expect(h.last('c1', 'lobby')).toEqual({
     type: 'lobby', phase: 'lobby', round: 0,
     players: [{ id: 'p1', name: 'NICK', host: true, connected: true, playing: false }],
@@ -120,8 +120,8 @@ it('hands the host on to the earliest player left', () => {
   expect(h.closed).toEqual(['c1']);
   expect(h.inbox('c1')).toEqual([]);
   expect(h.last('c2', 'lobby')!.players.map((p) => [p.id, p.host])).toEqual([['p2', true], ['p3', false]]);
-  h.close('c2');
-  expect(h.closed).toEqual(['c1']);
+  h.send('c2', { type: 'leave' });
+  expect(h.closed).toEqual(['c1', 'c2']);
   expect(h.last('c3', 'lobby')!.players).toEqual([{ id: 'p3', name: 'BUDI', host: true, connected: true, playing: false }]);
 });
 
@@ -156,7 +156,7 @@ it('lets a player who comes in during the countdown watch, with the tower at onc
   h.hello('c2', 'RARA');
   h.send('c1', { type: 'start' });
   h.hello('c3', 'BUDI');
-  expect(h.inbox('c3').map((m) => m.type)).toEqual(['welcome', 'lobby', 'tower']);
+  expect(h.inbox('c3').map((m) => m.type)).toEqual(['welcome', 'lobby', 'countdown', 'tower']);
   expect(h.last('c3', 'lobby')!.players.map((p) => [p.id, p.playing])).toEqual([['p1', true], ['p2', true], ['p3', false]]);
   expect(h.last('c3', 'tower')!.rows.map((r) => r.id)).toEqual(['p1', 'p2']);
 });
@@ -166,10 +166,11 @@ it('comes back the same from what it saved', () => {
   h.hello('c1', 'NICK');
   h.hello('c2', 'RARA');
   h.send('c1', { type: 'start' });
-  const copy = LobbyCore.restore(h.core.saved(), () => 7, h.now);
+  const options = { seeds: () => 7, tokens: () => 't3', version: VERSION };
+  const copy = LobbyCore.restore(h.core.saved(), options, h.now, new Set(['c1', 'c2']));
   expect(copy.code).toBe('K7RM2Q');
   expect(copy.saved()).toEqual(h.core.saved());
-  const hello: LobbyEvent = { kind: 'message', conn: 'c3', msg: { type: 'hello', name: 'BUDI' } };
+  const hello: LobbyEvent = { kind: 'message', conn: 'c3', msg: { type: 'hello', v: VERSION, name: 'BUDI', token: null } };
   expect(copy.handle(hello, h.now)).toEqual(h.core.handle(hello, h.now));
   expect(copy.saved()).toEqual(h.core.saved());
 });

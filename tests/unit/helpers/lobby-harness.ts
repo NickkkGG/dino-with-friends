@@ -1,4 +1,4 @@
-import { LobbyCore } from '../../../shared/lobby/core';
+import { COUNTDOWN_MS, LobbyCore } from '../../../shared/lobby/core';
 import type { LobbyEvent } from '../../../shared/lobby/core';
 import type { ClientMessage, RunState, ServerMessage } from '../../../shared/lobby/protocol';
 
@@ -10,13 +10,24 @@ export function runAt(t: number, d: number, hp = 3): { type: 'state' } & RunStat
   };
 }
 
+/** The build the harness lobby runs, and so the one its hellos say. */
+export const VERSION = 'v1';
+
 /**
- * A lobby with code K7RM2Q, its own clock from 1 000 000 and a mailbox per connection. Round seeds come from `seeds`
- * in turn, from the start again when they run out.
+ * A lobby with code K7RM2Q on build VERSION, its own clock from 1 000 000 and a mailbox per connection. Round seeds
+ * come from `seeds` in turn, from the start again when they run out; seat tokens are t1, t2, … in the order the seats
+ * are made.
  */
 export function lobbyHarness(seeds: readonly number[] = [111, 222, 333]) {
   let picked = 0;
-  const core = new LobbyCore('K7RM2Q', () => seeds[picked++ % seeds.length]!);
+  let made = 0;
+  const core = new LobbyCore({
+    code: 'K7RM2Q',
+    seeds: () => seeds[picked++ % seeds.length]!,
+    tokens: () => `t${++made}`,
+    version: VERSION,
+    now: 1_000_000,
+  });
   const inboxes = new Map<string, ServerMessage[]>();
   let now = 1_000_000;
   let wakeAt: number | null = null;
@@ -44,7 +55,8 @@ export function lobbyHarness(seeds: readonly number[] = [111, 222, 333]) {
     },
     advance: (ms: number) => void (now += ms),
     send: (conn: string, msg: ClientMessage) => run({ kind: 'message', conn, msg }),
-    hello: (conn: string, name: string) => run({ kind: 'message', conn, msg: { type: 'hello', name } }),
+    hello: (conn: string, name: string, token: string | null = null) =>
+      run({ kind: 'message', conn, msg: { type: 'hello', v: VERSION, name, token } }),
     bad: (conn: string) => run({ kind: 'bad', conn }),
     close: (conn: string) => run({ kind: 'close', conn }),
     alarm: () => run({ kind: 'alarm' }),
@@ -60,3 +72,18 @@ export function lobbyHarness(seeds: readonly number[] = [111, 222, 333]) {
   };
   return h;
 }
+
+export type Harness = ReturnType<typeof lobbyHarness>;
+
+/** NICK (c1, the host) and RARA (c2) start a round, and the clock is at its first step. */
+export function race(h: Harness): void {
+  h.hello('c1', 'NICK');
+  h.hello('c2', 'RARA');
+  h.send('c1', { type: 'start' });
+  h.advance(COUNTDOWN_MS);
+  h.alarm();
+  h.clear();
+}
+
+/** Player `id`'s line in the latest tower connection `conn` was sent. */
+export const row = (h: Harness, conn: string, id: string) => h.last(conn, 'tower')!.rows.find((r) => r.id === id);
