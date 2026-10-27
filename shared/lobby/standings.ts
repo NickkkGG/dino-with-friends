@@ -5,7 +5,7 @@ export interface Standing {
   id: string;
   score: number;
   alive: boolean;
-  /** When the player ran out of HP, in ms of the round; null while still running. */
+  /** When the player went out, on the lobby's clock; null while still running. */
   diedAt: number | null;
   /** The order the players came into the lobby in, which settles a full tie. */
   joinOrder: number;

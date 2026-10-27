@@ -1,8 +1,8 @@
 import { HP_START } from '../sim/constants';
 import { scoreOf } from '../sim/timeline';
 import { cleanName, uniqueName } from './name';
-import type { ClientMessage, LobbyPhase, LobbyPlayer, ResultRow, ServerMessage } from './protocol';
-import { rankStandings } from './standings';
+import type { ClientMessage, LobbyPhase, LobbyPlayer, ResultRow, RunState, ServerMessage } from './protocol';
+import { clampRun, rankStandings, roundOver } from './standings';
 
 /** The most players a lobby holds, watching or not. */
 export const MAX_PLAYERS = 8;
@@ -100,6 +100,8 @@ export class LobbyCore {
   private runners: Runner[] = [];
   private results: ResultRow[] = [];
   private dirty = false;
+  private lastTowerAt = -Infinity;
+  private towerDue = false;
   private out: Send[] = [];
   private toClose: string[] = [];
 
@@ -127,6 +129,7 @@ export class LobbyCore {
   handle(ev: LobbyEvent, now: number): LobbyStep {
     this.out = [];
     this.toClose = [];
+    this.towerDue = false;
     switch (ev.kind) {
       case 'message':
         this.onMessage(ev.conn, ev.msg, now);
@@ -135,13 +138,16 @@ export class LobbyCore {
         this.sendTo(ev.conn, { type: 'error', code: 'BAD_MESSAGE' });
         break;
       case 'close':
-        this.remove(ev.conn);
+        this.remove(ev.conn, now);
         break;
       case 'alarm':
         this.onAlarm(now);
         break;
     }
-    return { send: this.out, close: this.toClose, wakeAt: this.phase === 'countdown' ? this.startAt : null };
+    if (this.phase === 'playing') this.dropStale(now);
+    if (this.towerDue) this.sendTower(now);
+    if (this.inRound() && roundOver(this.standings())) this.finish(now);
+    return { send: this.out, close: this.toClose, wakeAt: this.wakeAt() };
   }
 
   saved(): SavedLobby {
@@ -184,13 +190,16 @@ export class LobbyCore {
         break;
       case 'leave':
         this.toClose.push(conn);
-        this.remove(conn);
+        this.remove(conn, now);
         break;
       case 'start':
         this.start(conn, now);
         break;
       case 'state':
+        this.onState(conn, msg, now);
+        break;
       case 'dead':
+        this.onDead(conn, msg.d, now);
         break;
     }
   }
@@ -223,14 +232,17 @@ export class LobbyCore {
     if (this.phase !== 'lobby') this.sendTo(conn, this.tower());
   }
 
-  private remove(conn: string): void {
+  /** A player leaving. One who is in the round is out with the distance they had, and stays on the board. */
+  private remove(conn: string, now: number): void {
     const gone = this.playerOn(conn);
     if (!gone) return;
+    const runner = this.aliveRunnerOn(conn);
     this.players = this.players.filter((p) => p !== gone);
     const next = this.players[0];
     if (gone.host && next) next.host = true;
     this.dirty = true;
     this.sendLobby();
+    if (runner && this.inRound()) this.knockOut(runner, now);
   }
 
   private start(conn: string, now: number): void {
@@ -257,10 +269,55 @@ export class LobbyCore {
       t: 0,
       lastStateAt: this.startAt,
     }));
+    this.results = [];
     this.dirty = true;
     this.broadcast({ type: 'countdown', round: this.round, seed: this.seed, startAt: this.startAt });
     this.sendLobby();
-    this.broadcast(this.tower());
+    this.sendTower(now);
+  }
+
+  private onState(conn: string, run: RunState, now: number): void {
+    const runner = this.phase === 'playing' ? this.aliveRunnerOn(conn) : undefined;
+    if (!runner) return;
+    const { t, d } = clampRun(runner, run, now - this.startAt);
+    runner.t = t;
+    runner.d = d;
+    runner.hp = run.hp;
+    runner.lastStateAt = now;
+    if (now - this.lastTowerAt >= TOWER_MS) this.towerDue = true;
+  }
+
+  /** A runner out of HP. The message has no round time of its own, so the distance is held to the round's. */
+  private onDead(conn: string, d: number, now: number): void {
+    const runner = this.phase === 'playing' ? this.aliveRunnerOn(conn) : undefined;
+    if (!runner) return;
+    const roundMs = now - this.startAt;
+    runner.d = clampRun(runner, { t: roundMs, d }, roundMs).d;
+    this.knockOut(runner, now);
+  }
+
+  /** Runners who have sent no state for STALE_MS are out with the distance they had. */
+  private dropStale(now: number): void {
+    for (const runner of this.runners) {
+      if (runner.alive && now - runner.lastStateAt >= STALE_MS) this.knockOut(runner, now);
+    }
+  }
+
+  private knockOut(runner: Runner, now: number): void {
+    runner.alive = false;
+    runner.hp = 0;
+    runner.diedAt = now;
+    this.dirty = true;
+    this.towerDue = true;
+  }
+
+  private finish(now: number): void {
+    this.phase = 'results';
+    this.endsAt = now + RESULTS_MS;
+    this.results = rankStandings(this.standings()).map(({ id, name, score }, i) => ({ id, name, score, place: i + 1 }));
+    this.dirty = true;
+    this.broadcast({ type: 'end', round: this.round, results: this.results });
+    this.sendLobby();
   }
 
   private onAlarm(now: number): void {
@@ -268,16 +325,59 @@ export class LobbyCore {
       this.phase = 'playing';
       this.dirty = true;
       this.sendLobby();
+    } else if (this.phase === 'results' && now >= this.endsAt) {
+      this.phase = 'lobby';
+      for (const p of this.players) p.playing = false;
+      this.runners = [];
+      this.dirty = true;
+      this.sendLobby();
     }
+  }
+
+  private wakeAt(): number | null {
+    switch (this.phase) {
+      case 'lobby':
+        return null;
+      case 'countdown':
+        return this.startAt;
+      case 'playing': {
+        let soonest: number | null = null;
+        for (const runner of this.runners) {
+          const staleAt = runner.lastStateAt + STALE_MS;
+          if (runner.alive && (soonest === null || staleAt < soonest)) soonest = staleAt;
+        }
+        return soonest;
+      }
+      case 'results':
+        return this.endsAt;
+    }
+  }
+
+  private inRound(): boolean {
+    return this.phase === 'countdown' || this.phase === 'playing';
   }
 
   private playerOn(conn: string): SavedPlayer | undefined {
     return this.players.find((p) => p.conn === conn);
   }
 
+  private aliveRunnerOn(conn: string): Runner | undefined {
+    const player = this.playerOn(conn);
+    return player && this.runners.find((r) => r.id === player.id && r.alive);
+  }
+
+  private standings(): (Runner & { score: number })[] {
+    return this.runners.map((r) => ({ ...r, score: scoreOf(r.d) }));
+  }
+
   private tower(): ServerMessage {
-    const ranked = rankStandings(this.runners.map((r) => ({ ...r, score: scoreOf(r.d) })));
-    return { type: 'tower', rows: ranked.map(({ id, score, hp, alive }) => ({ id, score, hp, alive })) };
+    const rows = rankStandings(this.standings()).map(({ id, score, hp, alive }) => ({ id, score, hp, alive }));
+    return { type: 'tower', rows };
+  }
+
+  private sendTower(now: number): void {
+    this.broadcast(this.tower());
+    this.lastTowerAt = now;
   }
 
   private sendLobby(): void {
