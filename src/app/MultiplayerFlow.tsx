@@ -68,6 +68,7 @@ export function MultiplayerFlow({ sprites, sound, testMode, onExit, onScreen }: 
   const open = (code: string) => {
     const s = new LobbySession({ code, name });
     current.current = s;
+    last.current = { kind: 'join', code }; // TRY AGAIN comes back in here, also for the one who made the lobby
     setSession(s);
     setClosed(0); // a new lobby counts its rounds from 1
     s.connect();
