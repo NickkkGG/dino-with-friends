@@ -76,7 +76,7 @@ it('sends the tower at once when someone is out', () => {
     { id: 'p1', score: 60, hp: 3, alive: true },
     { id: 'p2', score: 50, hp: 0, alive: false },
   ]);
-  expect(h.inbox('c1').map((m) => m.type)).toEqual(['tower', 'end', 'lobby']);
+  expect(h.inbox('c1').map((m) => m.type)).toEqual(['tower', 'end', 'lobby', 'watching']);
 });
 
 it('ends when the one left is ahead of every final score', () => {
@@ -227,7 +227,7 @@ it('lets a late player watch, then play the next round', () => {
   race(h);
   h.advance(1000);
   h.hello('c3', 'BUDI');
-  expect(h.inbox('c3').map((m) => m.type)).toEqual(['welcome', 'lobby', 'countdown', 'tower']);
+  expect(h.inbox('c3').map((m) => m.type)).toEqual(['welcome', 'lobby', 'countdown', 'tower', 'watching']);
   expect(h.last('c3', 'lobby')!.players.map((p) => p.playing)).toEqual([true, true, false]);
   expect(h.last('c3', 'tower')!.rows.map((r) => r.id)).toEqual(['p1', 'p2']);
   h.send('c3', runAt(1000, 500));

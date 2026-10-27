@@ -76,7 +76,7 @@ it('keeps the names of players who have left', () => {
 it('keeps the countdown, the tower and the end as they come', () => {
   const s = setup();
   s.fake.last.open();
-  s.fake.last.serverSays({ type: 'countdown', round: 1, seed: 7, startAt: 1_761_552_003_500 });
+  s.fake.last.serverSays({ type: 'countdown', round: 1, seed: 7, startAt: 1_761_552_003_500, runners: [] });
   s.fake.last.serverSays({ type: 'tower', rows: [{ id: 'p1', score: 3, hp: 3, alive: true }] });
   s.fake.last.serverSays({ type: 'end', round: 1, results: [{ id: 'p1', name: 'NICK', score: 51, place: 1 }] });
   expect(s.session.view()).toMatchObject({
@@ -118,7 +118,7 @@ it('pings again on a countdown', () => {
   s.fake.last.open();
   answerPings(s, 0, 40, 5);
   expect(pings(s)).toHaveLength(5);
-  s.fake.last.serverSays({ type: 'countdown', round: 1, seed: 7, startAt: 1 });
+  s.fake.last.serverSays({ type: 'countdown', round: 1, seed: 7, startAt: 1, runners: [] });
   expect(pings(s)).toHaveLength(6);
   answerPings(s, 0, 40, 10);
   expect(pings(s)).toHaveLength(10);
@@ -181,6 +181,43 @@ it('sends START, the run and the death, and nothing before the socket is open', 
   s.session.sendState(run);
   s.session.sendDead(1234);
   expect(s.fake.last.sent().slice(-3)).toEqual([{ type: 'start' }, { type: 'state', ...run }, { type: 'dead', d: 1234 }]);
+});
+
+const RUN: RunState = {
+  t: 1000, d: 620.5, y: 93, pose: 'run', hp: 3, hurt: 0, fx: { doubleJump: 0, ghost: 0, speed: 0 }, got: 1, spd: 6.4,
+  x: 612, first: 2, end: 4, birds: [[3, -5]], night: 0, airJumped: false, hit: null, skill: null,
+};
+
+it("takes the runners' names from the countdown", () => {
+  const s = setup();
+  s.fake.last.open();
+  const runners = [{ id: 'p1', name: 'NICK' }, { id: 'p2', name: 'RARA' }];
+  s.fake.last.serverSays({ type: 'countdown', round: 1, seed: 7, startAt: 1, runners });
+  expect(s.session.view().names.get('p2')).toBe('RARA');
+});
+
+it('keeps who watches whom, and hands relayed states to whoever listens', () => {
+  const s = setup();
+  s.fake.last.open();
+  expect(s.session.view().watching).toEqual([]);
+  s.fake.last.serverSays({ type: 'watching', pairs: [{ id: 'p3', target: 'p1' }] });
+  expect(s.session.view().watching).toEqual([{ id: 'p3', target: 'p1' }]);
+  const got: [string, RunState][] = [];
+  const stop = s.session.onRelay((id, state) => got.push([id, state]));
+  const view = s.session.view();
+  s.fake.last.serverSays({ type: 'relay', id: 'p1', state: RUN });
+  expect(got).toEqual([['p1', RUN]]);
+  expect(s.session.view()).toBe(view);
+  stop();
+  s.fake.last.serverSays({ type: 'relay', id: 'p1', state: RUN });
+  expect(got).toHaveLength(1);
+});
+
+it('says watch', () => {
+  const s = setup();
+  s.fake.last.open();
+  s.session.watch('p1');
+  expect(s.fake.last.sent().at(-1)).toEqual({ type: 'watch', target: 'p1' });
 });
 
 it('takes no notice of a pong for a ping it is not waiting for', () => {

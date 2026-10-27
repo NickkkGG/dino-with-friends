@@ -1,5 +1,5 @@
 import type {
-  ClientMessage, LobbyPhase, LobbyPlayer, ResultRow, RunState, ServerMessage, TowerRow,
+  ClientMessage, LobbyPhase, LobbyPlayer, ResultRow, RunState, ServerMessage, TowerRow, WatchPair,
 } from '../../shared/lobby/protocol';
 import { parseServerMessage } from '../../shared/lobby/protocol';
 import { wsUrl } from './api';
@@ -33,6 +33,8 @@ export interface SessionView {
   end: { round: number; results: readonly ResultRow[] } | null;
   /** The name of every player seen in this lobby, by id, also of those who have left. */
   names: ReadonlyMap<string, string>;
+  /** Who watches whom in the round on, in the order they began. */
+  watching: readonly WatchPair[];
 }
 
 export interface SessionOptions {
@@ -85,6 +87,7 @@ export class LobbySession {
   private readonly version: string;
   private readonly clock = new ClockSync();
   private readonly listeners = new Set<() => void>();
+  private readonly relayListeners = new Set<(id: string, s: RunState) => void>();
   private socket: SocketLike | null = null;
   private current: SessionView;
   private pingsLeft = 0;
@@ -103,7 +106,7 @@ export class LobbySession {
     this.version = o.version ?? __BUILD_VERSION__;
     this.current = {
       status: 'connecting', error: null, code: o.code, you: null, players: [], phase: 'lobby', round: 0,
-      countdown: null, tower: [], end: null, names: new Map(),
+      countdown: null, tower: [], end: null, names: new Map(), watching: [],
     };
   }
 
@@ -143,6 +146,17 @@ export class LobbySession {
 
   sendDead(d: number): void {
     this.send({ type: 'dead', d });
+  }
+
+  /** Asks to watch a runner. */
+  watch(target: string): void {
+    this.send({ type: 'watch', target });
+  }
+
+  /** Each relayed state, as it comes; gives back the way to stop. Relays never go through the view. */
+  onRelay(fn: (id: string, s: RunState) => void): () => void {
+    this.relayListeners.add(fn);
+    return () => this.relayListeners.delete(fn);
   }
 
   /** The server's clock now: from the pongs once there is one, from the date before that. */
@@ -193,9 +207,18 @@ export class LobbySession {
         this.update({ players: msg.players, phase: msg.phase, round: msg.round, names });
         break;
       }
-      case 'countdown':
-        this.update({ countdown: { round: msg.round, seed: msg.seed, startAt: msg.startAt } });
+      case 'countdown': {
+        const names = new Map(this.current.names);
+        for (const r of msg.runners) names.set(r.id, r.name);
+        this.update({ countdown: { round: msg.round, seed: msg.seed, startAt: msg.startAt }, names });
         this.pingBurst();
+        break;
+      }
+      case 'watching':
+        this.update({ watching: msg.pairs });
+        break;
+      case 'relay':
+        for (const fn of this.relayListeners) fn(msg.id, msg.state);
         break;
       case 'tower':
         this.update({ tower: msg.rows });

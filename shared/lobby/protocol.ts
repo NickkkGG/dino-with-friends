@@ -56,6 +56,8 @@ export type ClientMessage =
   | { type: 'start' }
   | ({ type: 'state' } & RunState)
   | { type: 'dead'; d: number }
+  /** A player out of the round, or not in it, asks to watch runner `target`. */
+  | { type: 'watch'; target: string }
   | { type: 'leave' }
   | { type: 'ping'; c: number };
 
@@ -76,6 +78,18 @@ export interface TowerRow {
   alive: boolean;
 }
 
+/** A runner of the round, under the name they had at START. */
+export interface RunnerName {
+  id: string;
+  name: string;
+}
+
+/** Player `id` is watching runner `target`. */
+export interface WatchPair {
+  id: string;
+  target: string;
+}
+
 export interface ResultRow {
   id: string;
   name: string;
@@ -87,10 +101,14 @@ export type ServerMessage =
   /** `token` gives the seat back to a new connection of this tab. */
   | { type: 'welcome'; you: string; token: string; code: string }
   | { type: 'lobby'; players: LobbyPlayer[]; phase: LobbyPhase; round: number }
-  | { type: 'countdown'; round: number; seed: number; startAt: number }
+  | { type: 'countdown'; round: number; seed: number; startAt: number; runners: RunnerName[] }
   | { type: 'tower'; rows: TowerRow[] }
   | { type: 'end'; round: number; results: ResultRow[] }
   | { type: 'pong'; c: number; s: number }
+  /** A state of runner `id`, for those watching them. */
+  | { type: 'relay'; id: string; state: RunState }
+  /** Who watches whom, in the order they began. */
+  | { type: 'watching'; pairs: WatchPair[] }
   | { type: 'error'; code: ErrorCode };
 
 /** The longest text a player may send; anything longer is not read at all. */
@@ -99,6 +117,7 @@ export const MAX_CLIENT_CHARS = 1024;
 // What a player's message may hold. The name is cut to its real length later, when the lobby cleans it.
 const HELLO_NAME_CHARS = 64;
 const VERSION_CHARS = 32;
+const ID_CHARS = 16;
 const TOKEN_CHARS = 64;
 const T_MAX = 3_600_000;
 const D_MAX = 1e9;
@@ -265,6 +284,10 @@ export function parseClientMessage(raw: unknown): ClientMessage | null {
     }
     case 'leave':
       return { type: 'leave' };
+    case 'watch': {
+      const { target } = m;
+      return typeof target === 'string' && target.length >= 1 && target.length <= ID_CHARS ? { type: 'watch', target } : null;
+    }
     case 'ping': {
       const { c } = m;
       return isNumber(c) ? { type: 'ping', c } : null;
@@ -294,6 +317,18 @@ function readTowerRow(value: unknown): TowerRow | null {
     : null;
 }
 
+function readRunnerName(value: unknown): RunnerName | null {
+  if (!isObject(value)) return null;
+  const { id, name } = value;
+  return typeof id === 'string' && typeof name === 'string' ? { id, name } : null;
+}
+
+function readWatchPair(value: unknown): WatchPair | null {
+  if (!isObject(value)) return null;
+  const { id, target } = value;
+  return typeof id === 'string' && typeof target === 'string' ? { id, target } : null;
+}
+
 function readResultRow(value: unknown): ResultRow | null {
   if (!isObject(value)) return null;
   const { id, name, score, place } = value;
@@ -320,7 +355,10 @@ export function parseServerMessage(raw: unknown): ServerMessage | null {
     }
     case 'countdown': {
       const { round, seed, startAt } = m;
-      return isNumber(round) && isNumber(seed) && isNumber(startAt) ? { type: 'countdown', round, seed, startAt } : null;
+      const runners = readList(m.runners, readRunnerName);
+      return isNumber(round) && isNumber(seed) && isNumber(startAt) && runners !== null
+        ? { type: 'countdown', round, seed, startAt, runners }
+        : null;
     }
     case 'tower': {
       const rows = readList(m.rows, readTowerRow);
@@ -334,6 +372,15 @@ export function parseServerMessage(raw: unknown): ServerMessage | null {
     case 'pong': {
       const { c, s } = m;
       return isNumber(c) && isNumber(s) ? { type: 'pong', c, s } : null;
+    }
+    case 'relay': {
+      const { id } = m;
+      const state = readRunState(m.state);
+      return typeof id === 'string' && state !== null ? { type: 'relay', id, state } : null;
+    }
+    case 'watching': {
+      const pairs = readList(m.pairs, readWatchPair);
+      return pairs !== null ? { type: 'watching', pairs } : null;
     }
     case 'error': {
       const { code } = m;

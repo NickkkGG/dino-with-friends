@@ -1,7 +1,7 @@
 import { HP_START } from '../sim/constants';
 import { scoreOf } from '../sim/timeline';
 import { cleanName, uniqueName } from './name';
-import type { ClientMessage, LobbyPhase, LobbyPlayer, ResultRow, RunState, ServerMessage } from './protocol';
+import type { ClientMessage, LobbyPhase, LobbyPlayer, ResultRow, RunState, ServerMessage, WatchPair } from './protocol';
 import { clampRun, rankStandings, roundOver } from './standings';
 
 /** The most players a lobby holds, watching or not. */
@@ -142,6 +142,9 @@ export class LobbyCore {
   private runners: Runner[] = [];
   private results: ResultRow[] = [];
   private emptySince: number | null;
+  // Who watches whom, in the order they began, and each runner's last state: kept in memory only, never saved.
+  private watching: WatchPair[] = [];
+  private lastStates = new Map<string, RunState>();
   // A new lobby has to be saved: it is a lobby from now on.
   private dirty = true;
   private lastTowerAt = -Infinity;
@@ -262,8 +265,13 @@ export class LobbyCore {
       case 'start':
         this.start(conn, now);
         break;
-      case 'state':
-        this.onState(conn, msg, now);
+      case 'state': {
+        const { type: _, ...run } = msg;
+        this.onState(conn, run, now);
+        break;
+      }
+      case 'watch':
+        this.watch(conn, msg.target);
         break;
       case 'dead':
         this.onDead(conn, msg.d, now);
@@ -330,6 +338,7 @@ export class LobbyCore {
     this.sendLobby();
     if (this.inRound()) this.sendTo(p.conn, this.countdown());
     if (this.phase !== 'lobby') this.sendTo(p.conn, this.tower());
+    if (this.inRound()) this.sendTo(p.conn, this.watchingNow());
   }
 
   /** A connection that closed. Its seat stays, away, for its player to come back to, and so does a place in the round. */
@@ -340,6 +349,7 @@ export class LobbyCore {
     seat.awaySince = now;
     this.dirty = true;
     this.sendLobby();
+    this.unwatch(seat.id);
   }
 
   /** A player who leaves by LEAVE. */
@@ -362,7 +372,31 @@ export class LobbyCore {
     if (gone.host) this.handHost();
     this.dirty = true;
     this.sendLobby();
+    this.unwatch(gone.id);
     if (runner && this.inRound()) this.knockOut(runner, now);
+  }
+
+  /**
+   * A player out of the round, or not in it, watching a runner still running, while the round is on. They go to the
+   * end of the line, unless they watch that runner already; either way they get the runner's last state at once.
+   */
+  private watch(conn: string, target: string): void {
+    const seat = this.playerOn(conn);
+    if (!seat?.connected || !this.inRound() || this.aliveRunnerOn(conn)) return;
+    if (target === seat.id || !this.runners.some((r) => r.id === target && r.alive)) return;
+    if (!this.watching.some((w) => w.id === seat.id && w.target === target)) {
+      this.watching = [...this.watching.filter((w) => w.id !== seat.id), { id: seat.id, target }];
+      this.broadcast(this.watchingNow());
+    }
+    const last = this.lastStates.get(target);
+    if (last) this.sendTo(conn, { type: 'relay', id: target, state: last });
+  }
+
+  /** A player who watches no more: gone, away, or out of the lobby. */
+  private unwatch(id: string): void {
+    if (!this.watching.some((w) => w.id === id)) return;
+    this.watching = this.watching.filter((w) => w.id !== id);
+    this.broadcast(this.watchingNow());
   }
 
   /** The host's seat is gone: the seat that came in earliest hosts now, the earliest connected one first. */
@@ -398,6 +432,7 @@ export class LobbyCore {
       lastStateAt: this.startAt,
     }));
     this.results = [];
+    this.lastStates.clear();
     this.dirty = true;
     this.broadcast(this.countdown());
     this.sendLobby();
@@ -413,6 +448,14 @@ export class LobbyCore {
     runner.hp = run.hp;
     runner.lastStateAt = now;
     if (now - this.lastTowerAt >= TOWER_MS) this.towerDue = true;
+    // On to whoever watches this runner, as the lobby holds it.
+    const state = { ...run, t, d };
+    this.lastStates.set(runner.id, state);
+    const relay: ServerMessage = { type: 'relay', id: runner.id, state };
+    for (const w of this.watching) {
+      const seat = w.target === runner.id ? this.players.find((p) => p.id === w.id) : undefined;
+      if (seat?.connected) this.sendTo(seat.conn, relay);
+    }
   }
 
   /** A runner out of HP. The message has no round time of its own, so the distance is held to the round's. */
@@ -446,6 +489,9 @@ export class LobbyCore {
     this.dirty = true;
     this.broadcast({ type: 'end', round: this.round, results: this.results });
     this.sendLobby();
+    this.watching = [];
+    this.lastStates.clear();
+    this.broadcast(this.watchingNow());
   }
 
   private onAlarm(now: number): void {
@@ -518,7 +564,12 @@ export class LobbyCore {
   }
 
   private countdown(): ServerMessage {
-    return { type: 'countdown', round: this.round, seed: this.seed, startAt: this.startAt };
+    const runners = this.runners.map(({ id, name }) => ({ id, name }));
+    return { type: 'countdown', round: this.round, seed: this.seed, startAt: this.startAt, runners };
+  }
+
+  private watchingNow(): ServerMessage {
+    return { type: 'watching', pairs: this.watching.map((w) => ({ ...w })) };
   }
 
   private tower(): ServerMessage {

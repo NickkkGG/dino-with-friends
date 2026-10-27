@@ -132,7 +132,7 @@ it('gives a runner who comes back the round again, and takes their states', () =
   race(h);
   h.close('c2');
   h.hello('c3', 'RARA', 't2');
-  expect(h.inbox('c3').map((m) => m.type)).toEqual(['welcome', 'lobby', 'countdown', 'tower']);
+  expect(h.inbox('c3').map((m) => m.type)).toEqual(['welcome', 'lobby', 'countdown', 'tower', 'watching']);
   h.advance(1000);
   h.send('c3', runAt(1000, 600));
   expect(row(h, 'c1', 'p2')).toMatchObject({ score: 15, alive: true });

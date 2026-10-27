@@ -63,6 +63,7 @@ export function lobbyHarness(seeds: readonly number[] = [111, 222, 333]) {
     send: (conn: string, msg: ClientMessage) => run({ kind: 'message', conn, msg }),
     hello: (conn: string, name: string, token: string | null = null) =>
       run({ kind: 'message', conn, msg: { type: 'hello', v: VERSION, name, token } }),
+    watch: (conn: string, target: string) => run({ kind: 'message', conn, msg: { type: 'watch', target } }),
     bad: (conn: string) => run({ kind: 'bad', conn }),
     close: (conn: string) => run({ kind: 'close', conn }),
     alarm: () => run({ kind: 'alarm' }),

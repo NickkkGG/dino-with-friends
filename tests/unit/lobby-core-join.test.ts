@@ -73,7 +73,8 @@ it('counts down from START, once', () => {
   h.hello('c2', 'RARA');
   h.send('c1', { type: 'start' });
   const startAt = h.now + 3500;
-  for (const c of ['c1', 'c2']) expect(h.last(c, 'countdown')).toEqual({ type: 'countdown', round: 1, seed: 7, startAt });
+  const runners = [{ id: 'p1', name: 'NICK' }, { id: 'p2', name: 'RARA' }];
+  for (const c of ['c1', 'c2']) expect(h.last(c, 'countdown')).toEqual({ type: 'countdown', round: 1, seed: 7, startAt, runners });
   expect(h.last('c2', 'lobby')).toMatchObject({ phase: 'countdown', round: 1 });
   expect(h.last('c2', 'lobby')!.players.every((p) => p.playing)).toBe(true);
   expect(h.last('c2', 'tower')!.rows).toEqual([
@@ -156,7 +157,7 @@ it('lets a player who comes in during the countdown watch, with the tower at onc
   h.hello('c2', 'RARA');
   h.send('c1', { type: 'start' });
   h.hello('c3', 'BUDI');
-  expect(h.inbox('c3').map((m) => m.type)).toEqual(['welcome', 'lobby', 'countdown', 'tower']);
+  expect(h.inbox('c3').map((m) => m.type)).toEqual(['welcome', 'lobby', 'countdown', 'tower', 'watching']);
   expect(h.last('c3', 'lobby')!.players.map((p) => [p.id, p.playing])).toEqual([['p1', true], ['p2', true], ['p3', false]]);
   expect(h.last('c3', 'tower')!.rows.map((r) => r.id)).toEqual(['p1', 'p2']);
 });

@@ -51,6 +51,22 @@ it('reads a hello with the build, the name and the token', () => {
   expect(parseServerMessage('{"type":"error","code":"REPLACED"}')).toEqual({ type: 'error', code: 'REPLACED' });
 });
 
+it('reads a watch, and the new server messages', () => {
+  expect(parseClientMessage('{"type":"watch","target":"p2"}')).toEqual({ type: 'watch', target: 'p2' });
+  expect(parseClientMessage('{"type":"watch","target":""}')).toBeNull();
+  expect(parseClientMessage(`{"type":"watch","target":"${'p'.repeat(17)}"}`)).toBeNull();
+  expect(parseServerMessage('{"type":"countdown","round":1,"seed":7,"startAt":9,"runners":[{"id":"p1","name":"NICK"}]}'))
+    .toEqual({ type: 'countdown', round: 1, seed: 7, startAt: 9, runners: [{ id: 'p1', name: 'NICK' }] });
+  expect(parseServerMessage(JSON.stringify({ type: 'relay', id: 'p1', state: RUN }))).toEqual({ type: 'relay', id: 'p1', state: RUN });
+  expect(parseServerMessage('{"type":"watching","pairs":[{"id":"p3","target":"p1"}]}'))
+    .toEqual({ type: 'watching', pairs: [{ id: 'p3', target: 'p1' }] });
+  for (const raw of [
+    '{"type":"countdown","round":1,"seed":7,"startAt":9}',
+    JSON.stringify({ type: 'relay', id: 'p1', state: { ...RUN, x: 'far' } }),
+    '{"type":"watching","pairs":[{"id":"p3"}]}',
+  ]) expect(parseServerMessage(raw), raw).toBeNull();
+});
+
 it('reads a whole state, and keeps only its own fields', () => {
   expect(parseClientMessage(JSON.stringify({ type: 'state', ...RUN, extra: 1 }))).toEqual({ type: 'state', ...RUN });
   const plain = { ...RUN, birds: [], hit: null, skill: null };
@@ -73,7 +89,7 @@ it('reads every server message', () => {
       type: 'lobby', phase: 'countdown', round: 1,
       players: [{ id: 'p1', name: 'NICK', host: true, connected: true, playing: true }],
     },
-    { type: 'countdown', round: 1, seed: 4294967295, startAt: 1761552000000 },
+    { type: 'countdown', round: 1, seed: 4294967295, startAt: 1761552000000, runners: [{ id: 'p1', name: 'NICK' }] },
     { type: 'tower', rows: [{ id: 'p1', score: 41, hp: 3, alive: true }, { id: 'p2', score: 12, hp: 0, alive: false }] },
     { type: 'end', round: 1, results: [{ id: 'p1', name: 'NICK', score: 51, place: 1 }] },
     { type: 'pong', c: 1.5, s: 1761552000000 },
