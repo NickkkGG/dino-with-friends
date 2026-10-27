@@ -1,19 +1,14 @@
-import { WORLD_H, WORLD_W } from '../../shared/sim/constants';
 import { resumeAfterPause } from '../../shared/sim/world';
+import { GameCanvases } from './canvases';
 import { reportGame, worldDebug } from './debug';
 import type { GameDebug } from './debug';
-import type { DrawContext } from './draw/context';
 import { InputController } from './input';
-import { HUD_STRIP, SKY } from './layout';
 import type { SoloLayout } from './layout';
 import { FixedStepLoop } from './loop';
-import { chooseRenderParams, sizeCanvas } from './render-params';
-import type { RenderParams } from './render-params';
 import { HI_KEY } from './solo-rules';
 import { SoloRun } from './solo-run';
 import type { SoloView } from './solo-run';
 import type { Sound } from './sound';
-import { sheetFor } from './sprites';
 import type { SpriteSet } from './sprites';
 import { readNumber } from './storage';
 import type { TestMode } from './test-mode';
@@ -34,9 +29,6 @@ export interface SoloGameOptions {
   onView(v: SoloView): void;
 }
 
-// A CSS length on whole device pixels, so the canvases keep sharp edges.
-const snap = (v: number, dpr: number) => Math.round(v * dpr) / dpr;
-
 const sameView = (a: SoloView, b: SoloView) =>
   a.phase === b.phase && a.inverted === b.inverted && a.hints === b.hints && a.deadMs === b.deadMs;
 
@@ -50,8 +42,7 @@ export class SoloGame {
   private readonly run: SoloRun;
   private readonly input: InputController;
   private readonly loop: FixedStepLoop;
-  private world: { dc: DrawContext; p: RenderParams; cssWidth: number } | null = null;
-  private hud: { dc: DrawContext; width: number } | null = null;
+  private readonly canvases: GameCanvases;
   private view: SoloView | null = null;
   private paused = false;
   private unreport: () => void = () => {};
@@ -62,25 +53,13 @@ export class SoloGame {
     this.input = new InputController(o.surface);
     this.input.state.setTouchMode(this.run.touchMode());
     this.loop = new FixedStepLoop(() => this.step(), () => this.render(), { timeScale: o.testMode.timeScale });
+    this.canvases = new GameCanvases({ canvas: o.canvas, hudCanvas: o.hudCanvas, sprites: o.sprites });
   }
 
   /** Sizes the canvases for a layout and draws at once. The round itself goes on untouched. */
   setLayout(l: SoloLayout, dpr: number): void {
     this.run.setWide(l.mode === 'wide');
-    const cssWidth = snap(l.canvas.w, dpr);
-    const p = chooseRenderParams(cssWidth, dpr);
-    sizeCanvas(this.o.canvas, cssWidth, snap(l.canvas.h, dpr), WORLD_W, WORLD_H + SKY, p);
-    const ctx = this.o.canvas.getContext('2d');
-    this.world = ctx && { dc: { ctx, k: p.k, sheet: sheetFor(this.o.sprites, p), oy: SKY }, p, cssWidth };
-    this.hud = null;
-    if (l.hud) {
-      const width = Math.round(l.hud.w / l.hudScale);
-      const cssW = snap(l.hud.w, dpr);
-      const hp = chooseRenderParams(cssW, dpr, width);
-      sizeCanvas(this.o.hudCanvas, cssW, snap(l.hud.h, dpr), width, HUD_STRIP.height, hp);
-      const hctx = this.o.hudCanvas.getContext('2d');
-      this.hud = hctx && { dc: { ctx: hctx, k: hp.k, sheet: sheetFor(this.o.sprites, hp), oy: 0 }, width };
-    }
+    this.canvases.setLayout(l, dpr);
     this.render();
   }
 
@@ -109,9 +88,7 @@ export class SoloGame {
   }
 
   private render(): void {
-    const w = this.run.world;
-    if (this.world) this.run.scene.draw(this.world.dc, w, this.run.hi);
-    if (this.hud) this.run.scene.drawHudStrip(this.hud.dc, w, this.run.hi, this.hud.width);
+    this.canvases.draw(this.run.scene, this.run.world, this.run.hi);
   }
 
   private emitView(): void {
@@ -145,11 +122,6 @@ export class SoloGame {
   };
 
   private debug(): GameDebug {
-    const { canvas } = this.o;
-    const p = this.world?.p;
-    return {
-      ...worldDebug(this.run.world),
-      canvas: p ? { width: canvas.width, height: canvas.height, cssWidth: this.world!.cssWidth, k: p.k, sprite: p.sprite } : null,
-    };
+    return { ...worldDebug(this.run.world), canvas: this.canvases.debug() };
   }
 }
