@@ -1,0 +1,5 @@
+{
+  "name": "dino-with-friends",
+  "compatibility_date": "2026-10-01",
+  "assets": { "directory": "./dist" }
+}
