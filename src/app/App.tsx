@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { SOUND_URLS } from '../game/assets';
+import { soundOnButtons } from '../game/button-sound';
 import { debugState, installDebugHook } from '../game/debug';
 import { HI_KEY } from '../game/solo-rules';
 import { Sound } from '../game/sound';
@@ -42,6 +43,11 @@ function useUnlockSound(sound: Sound): void {
   }, [sound]);
 }
 
+// Every button that is pressed answers with the original's press sound.
+function useButtonSound(sound: Sound): void {
+  useEffect(() => soundOnButtons(window, sound), [sound]);
+}
+
 // window.__dwf for the browser tests, on every screen of the dev build.
 function useDebugHook(screen: string, sound: Sound): void {
   const current = useRef(screen);
@@ -65,6 +71,7 @@ function Game({ first }: { first: Screen }) {
     import.meta.env.DEV ? parseTestMode(window.location.search, true) : { ...NO_TEST_MODE },
   );
   useUnlockSound(sound);
+  useButtonSound(sound);
   useDebugHook(screen === 'multiplayer' ? flowScreen : screen, sound);
 
   useEffect(() => {

@@ -119,3 +119,27 @@ test('mute is remembered after a reload', async ({ page }) => {
   await expect(page.getByTestId('btn-mute')).toHaveAttribute('aria-label', 'SOUND OFF');
   expect(await page.evaluate(() => window.__dwf!.muted)).toBe(true);
 });
+
+test('a pressed button answers with the press sound, and a muted game stays quiet', async ({ page }) => {
+  // Counts the sounds played from files. On these screens nothing else plays one.
+  await page.addInitScript(() => {
+    const w = window as unknown as { played: number };
+    w.played = 0;
+    const start = AudioBufferSourceNode.prototype.start;
+    AudioBufferSourceNode.prototype.start = function (this: AudioBufferSourceNode, ...args: Parameters<typeof start>) {
+      w.played += 1;
+      return start.apply(this, args);
+    };
+  });
+  await page.goto('/');
+  const played = () => page.evaluate(() => (window as unknown as { played: number }).played);
+  await page.getByTestId('link-credits').click(); // the first press loads the sounds, then plays
+  await expect.poll(played).toBe(1);
+  await page.getByTestId('btn-back').click();
+  await expect.poll(played).toBe(2);
+  await page.getByTestId('btn-mute').click(); // SOUND OFF, with no press heard
+  await page.waitForTimeout(300);
+  expect(await played()).toBe(2);
+  await page.getByTestId('btn-mute').click(); // SOUND ON again, and the press says so
+  await expect.poll(played).toBe(3);
+});
