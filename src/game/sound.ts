@@ -1,18 +1,23 @@
 import { readFlag, writeFlag } from './storage';
 
-export type SoundName = 'press' | 'hit' | 'reached' | 'pickup';
+export type SoundName = 'press' | 'hit' | 'reached' | 'pickup' | 'countdown';
 
-type FileSound = Exclude<SoundName, 'pickup'>;
+type ToneSound = 'pickup' | 'countdown';
+type FileSound = Exclude<SoundName, ToneSound>;
 
 const FILES: readonly FileSound[] = ['press', 'hit', 'reached'];
 const MUTE_KEY = 'dwf.muted';
-// The skill pickup, which the original does not have: three rising square-wave notes, each fading out.
-const PICKUP_NOTES = [523.25, 659.25, 1046.5];
-const PICKUP_NOTE_S = 0.05;
-const PICKUP_GAIN = 0.06;
+// The sounds the original does not have, as square-wave notes that each fade out: three rising ones for the skill
+// pickup, and one a second for the countdown to a race.
+const TONES: Readonly<Record<ToneSound, { notes: readonly number[]; noteS: number }>> = {
+  pickup: { notes: [523.25, 659.25, 1046.5], noteS: 0.05 },
+  countdown: { notes: [440], noteS: 0.1 },
+};
+const TONE_GAIN = 0.06;
 
 /**
- * The original's three sounds and the pickup, played as the original plays them: each one straight to the speakers.
+ * The original's three sounds, the pickup and the countdown, played as the original plays its sounds: each one straight
+ * to the speakers.
  * Browsers only let a page make sound after a touch, click or key, so nothing plays until unlock() runs in one.
  */
 export class Sound {
@@ -51,8 +56,8 @@ export class Sound {
   play(name: SoundName): void {
     const ctx = this.ctx;
     if (this.isMuted || !ctx || ctx.state !== 'running') return;
-    if (name === 'pickup') {
-      this.playPickup(ctx);
+    if (name === 'pickup' || name === 'countdown') {
+      this.playTone(ctx, TONES[name]);
       return;
     }
     const buffer = this.buffers[name];
@@ -86,20 +91,20 @@ export class Sound {
     );
   }
 
-  private playPickup(ctx: AudioContext): void {
+  private playTone(ctx: AudioContext, tone: (typeof TONES)[ToneSound]): void {
     const t0 = ctx.currentTime;
-    const at = (i: number) => t0 + i * PICKUP_NOTE_S;
+    const at = (i: number) => t0 + i * tone.noteS;
     const osc = ctx.createOscillator();
     const gain = ctx.createGain();
     osc.type = 'square';
-    PICKUP_NOTES.forEach((f, i) => {
+    tone.notes.forEach((f, i) => {
       osc.frequency.setValueAtTime(f, at(i));
-      gain.gain.setValueAtTime(PICKUP_GAIN, at(i));
+      gain.gain.setValueAtTime(TONE_GAIN, at(i));
       gain.gain.linearRampToValueAtTime(0, at(i + 1));
     });
     osc.connect(gain);
     gain.connect(ctx.destination);
     osc.start(t0);
-    osc.stop(at(PICKUP_NOTES.length));
+    osc.stop(at(tone.notes.length));
   }
 }

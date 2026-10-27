@@ -26,6 +26,8 @@ export interface SceneOptions {
   introClip: boolean;
   /** Clouds drift 1 px every 3 steps whatever the world does, for a screen where nobody plays. */
   idleClouds: boolean;
+  /** Whether GAME OVER has the restart button under it. Default true; a race has no restart. */
+  restart?: boolean;
 }
 
 // The HUD in the world: the corner of the hearts, and the top of the score, where the original draws it.
@@ -136,7 +138,7 @@ export class Scene {
         this.meter.draw(dc, { width: WORLD_W, y: SCORE_Y, hi: this.o.showHi ? hi : 0, showScore: this.o.showScore });
       }
     }
-    if (w.phase === 'dead') this.over.draw(dc);
+    if (w.phase === 'dead') this.over.draw(dc, this.o.restart ?? true);
   }
 
   /** The HUD strip over a portrait world, `width` of its own pixels wide and 34 high, with dc.oy = 0. */

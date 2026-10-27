@@ -113,7 +113,7 @@ it('remembers mute in dwf.muted and never throws without audio', async () => {
   // No AudioContext here, as in a browser without Web Audio: unlock settles, play does nothing.
   expect(typeof globalThis.AudioContext).toBe('undefined');
   await expect(a.unlock()).resolves.toBeUndefined();
-  for (const name of ['press', 'hit', 'reached', 'pickup'] as const) expect(() => a.play(name)).not.toThrow();
+  for (const name of ['press', 'hit', 'reached', 'pickup', 'countdown'] as const) expect(() => a.play(name)).not.toThrow();
   setStorageForTests('throw');
   expect(() => new Sound(URLS).setMuted(true)).not.toThrow();
 });
@@ -209,4 +209,25 @@ it('pickup: three square notes of 50 ms, 523.25 → 659.25 → 1046.5 Hz, each f
   expect(gain.to).toEqual([ctx.destination]);
   expect(osc.starts).toEqual([t]);
   expect(osc.stops).toEqual([at(3)]);
+});
+
+it('plays the countdown beep: one square note at 440 Hz for 0.1 s, fading from 0.06 to 0', async () => {
+  withAudio();
+  const s = new Sound(URLS);
+  await s.unlock();
+  const ctx = FakeAudioContext.made[0]!;
+  s.play('countdown');
+  const osc = ctx.nodes.find((n) => n.kind === 'oscillator')!;
+  const gain = ctx.nodes.find((n) => n.kind === 'gain')!;
+  const t = ctx.currentTime;
+  expect(osc.type).toBe('square');
+  expect(osc.frequency.events).toEqual([['set', 440, t]]);
+  expect(gain.gain.events).toEqual([
+    ['set', 0.06, t],
+    ['ramp', 0, t + 0.1],
+  ]);
+  expect(osc.to).toEqual([gain]);
+  expect(gain.to).toEqual([ctx.destination]);
+  expect(osc.starts).toEqual([t]);
+  expect(osc.stops).toEqual([t + 0.1]);
 });

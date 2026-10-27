@@ -62,6 +62,25 @@ it('scene draws the HUD from the intro on, and GAME OVER only when dead', () => 
   expect(parts().gameOver).toBe(true);
 });
 
+it('can leave out the restart button', () => {
+  const opts = { sky: 40, hud: 'inside', showScore: true, showHi: true, introClip: false, idleClouds: false } as const;
+  const w = createWorld({ seed: 1, playerId: 'solo' });
+  w.phase = 'dead';
+  // GAME OVER's text is at source (655, 15) of the 1x sheet; the restart button is 36 wide at source y 68.
+  const parts = (scene: Scene) => {
+    const { dc, calls } = fakeDc(1, 1, 40);
+    scene.draw(dc, w, 0);
+    const images = callsOf(calls, 'drawImage');
+    return {
+      text: images.some((c) => c[1] === 655 && c[2] === 15),
+      button: images.some((c) => c[2] === 68 && c[3] === 36),
+    };
+  };
+  expect(parts(new Scene(opts, () => 0.5))).toEqual({ text: true, button: true });
+  expect(parts(new Scene({ ...opts, restart: true }, () => 0.5))).toEqual({ text: true, button: true });
+  expect(parts(new Scene({ ...opts, restart: false }, () => 0.5))).toEqual({ text: true, button: false });
+});
+
 it('setHud moves the hearts, the skills and the score out of the world and back', () => {
   const scene = new Scene({ sky: 40, hud: 'inside', showScore: true, showHi: true, introClip: true, idleClouds: false }, () => 0.5);
   const w = createWorld({ seed: 1, playerId: 'solo' });

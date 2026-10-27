@@ -1,7 +1,7 @@
 // Copyright 2024 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the third_party/chromium/LICENSE file.
-// Modified for DINO with FRIENDS: GameOverPanel stepped and drawn apart, on a given sheet; the logo frames (0 and 1) of the restart button are never drawn, frame 2 shows in their place, and the button stays on its last frame.
+// Modified for DINO with FRIENDS: GameOverPanel stepped and drawn apart, on a given sheet; the logo frames (0 and 1) of the restart button are never drawn, frame 2 shows in their place, and the button stays on its last frame; and the button can be left out, for a race that has no restart.
 
 import { STEP_MS, WORLD_H, WORLD_W } from '../../../shared/sim/constants';
 import { blit } from './context';
@@ -49,13 +49,15 @@ export class GameOverView {
     return Math.min(FRAMES.length - 1, Math.max(FIRST_FRAME_SHOWN, this.currentFrame));
   }
 
-  draw(dc: DrawContext): void {
+  /** GAME OVER, and the restart button under it unless `restart` is false. */
+  draw(dc: DrawContext, restart = true): void {
     const { pos, scale: s } = dc.sheet;
     const centerX = WORLD_W / 2;
     blit(
       dc, pos.textSprite.x + TEXT_X * s, pos.textSprite.y + TEXT_Y * s, TEXT_WIDTH * s, TEXT_HEIGHT * s,
       Math.round(centerX - TEXT_WIDTH / 2), Math.round((WORLD_H - 25) / 3), TEXT_WIDTH, TEXT_HEIGHT,
     );
+    if (!restart) return;
     // The original centres the button with half its height, not its width.
     blit(
       dc, pos.restart.x + FRAMES[this.restartFrame()]! * s, pos.restart.y, RESTART_WIDTH * s, RESTART_HEIGHT * s,

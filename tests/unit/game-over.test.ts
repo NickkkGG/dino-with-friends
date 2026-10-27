@@ -29,3 +29,11 @@ it('game over: text at (205, 42) and button at (284, 75); frame 2 through the lo
     [SHEET, 2 + 144, 130, 72, 64, 568, 150, 72, 64],
   ]);
 });
+
+it('can leave out the restart button', () => {
+  const g = new GameOverView();
+  for (let k = 0; k < 100; k++) g.step();
+  const { dc, calls } = fakeDc();
+  g.draw(dc, false);
+  expect(callsOf(calls, 'drawImage')).toEqual([[SHEET, 655, 15, 191, 11, 205, 42, 191, 11]]);
+});
