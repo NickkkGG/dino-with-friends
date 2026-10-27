@@ -1,5 +1,5 @@
 import { expect, it } from 'vitest';
-import type { LobbyPlayer } from '../../shared/lobby/protocol';
+import type { LobbyPlayer, RunState } from '../../shared/lobby/protocol';
 import { LobbySession } from '../../src/net/session';
 import { fakeSockets } from './helpers/fake-socket';
 
@@ -174,7 +174,10 @@ it('sends START, the run and the death, and nothing before the socket is open', 
   expect(s.fake.last.texts).toEqual([]);
   s.fake.last.open();
   s.session.start();
-  const run = { t: 1200, d: 724.5, y: 61, pose: 'jump', hp: 2, hurt: 800, fx: { doubleJump: 0, ghost: 0, speed: 0 }, got: 3, spd: 7 } as const;
+  const run: RunState = {
+    t: 1200, d: 724.5, y: 61, pose: 'jump', hp: 2, hurt: 800, fx: { doubleJump: 0, ghost: 0, speed: 0 }, got: 3, spd: 7,
+    x: 720, first: 1, end: 2, birds: [], night: 0, airJumped: false, hit: null, skill: null,
+  };
   s.session.sendState(run);
   s.session.sendDead(1234);
   expect(s.fake.last.sent().slice(-3)).toEqual([{ type: 'start' }, { type: 'state', ...run }, { type: 'dead', d: 1234 }]);

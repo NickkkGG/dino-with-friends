@@ -1,9 +1,17 @@
 import { expect, it } from 'vitest';
-import { parseClientMessage, parseServerMessage } from '../../shared/lobby/protocol';
+import { parseClientMessage, parseServerMessage, readRunState } from '../../shared/lobby/protocol';
+import type { RunState } from '../../shared/lobby/protocol';
 
 const STATE = {
   type: 'state', t: 1200, d: 724.5, y: 61.2, pose: 'jump', hp: 2, hurt: 800,
   fx: { doubleJump: 0, ghost: 4100, speed: 0 }, got: 3, spd: 7.2,
+  x: 720, first: 1, end: 3, birds: [[2, 4]], night: 0, airJumped: true, hit: null, skill: { id: 'doubleJump', step: 30 },
+};
+
+const RUN: RunState = {
+  t: 1000, d: 620.5, y: 93, pose: 'run', hp: 3, hurt: 0, fx: { doubleJump: 0, ghost: 0, speed: 0 }, got: 1, spd: 6.4,
+  x: 612, first: 2, end: 4, birds: [[3, -5]], night: 0, airJumped: false,
+  hit: { step: 40, x: 61.5, y: 100 }, skill: { id: 'ghost', step: 50 },
 };
 
 it('reads every client message and keeps only its own fields', () => {
@@ -30,6 +38,21 @@ it('turns away what is not a client message', () => {
   }
   expect(parseClientMessage(new ArrayBuffer(4))).toBeNull();
   expect(parseClientMessage(undefined)).toBeNull();
+});
+
+it('reads a whole state, and keeps only its own fields', () => {
+  expect(parseClientMessage(JSON.stringify({ type: 'state', ...RUN, extra: 1 }))).toEqual({ type: 'state', ...RUN });
+  const plain = { ...RUN, birds: [], hit: null, skill: null };
+  expect(readRunState(plain)).toEqual(plain);
+});
+
+it('turns away a state whose new parts are wrong', () => {
+  const bad: object[] = [
+    { x: -1 }, { x: 1.5 }, { first: 5, end: 4 }, { birds: [[5, 0]] }, { birds: [[3, 0.5]] }, { birds: [[3]] },
+    { birds: Array.from({ length: 9 }, () => [3, 0]) }, { night: 721 }, { airJumped: 1 },
+    { hit: { step: 40, x: 61 } }, { hit: { step: -1, x: 1, y: 1 } }, { skill: { id: 'fly', step: 1 } }, { skill: { id: 'ghost' } },
+  ];
+  for (const b of bad) expect(parseClientMessage(JSON.stringify({ type: 'state', ...RUN, ...b })), JSON.stringify(b)).toBeNull();
 });
 
 it('reads every server message', () => {

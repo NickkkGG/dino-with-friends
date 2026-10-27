@@ -1,4 +1,5 @@
 import { expect, it } from 'vitest';
+import { botInput, earliestSafe } from '../../shared/sim/autopilot';
 import { NO_INPUT, createWorld, stepWorld } from '../../shared/sim/world';
 import type { StepInput, World } from '../../shared/sim/world';
 import { STATE_EVERY_STEPS, runState } from '../../src/game/run-state';
@@ -11,6 +12,29 @@ const steps = (w: World, n: number, input: StepInput = NO_INPUT) => {
 it('describes a new round', () => {
   expect(runState(createWorld({ seed: 1, playerId: 'p1' }))).toEqual({
     t: 0, d: 0, y: 93, pose: 'run', hp: 3, hurt: 0, fx: { doubleJump: 0, ghost: 0, speed: 0 }, got: 0, spd: 6,
+    x: 0, first: 0, end: 0, birds: [], night: 0, airJumped: false, hit: null, skill: null,
+  });
+});
+
+it('says where the ground, the obstacles in the world and the birds are', () => {
+  const w = createWorld({ seed: 7, playerId: 'p1', invincible: true });
+  for (let i = 0; i < 20_000 && w.drift.size === 0; i++) stepWorld(w, botInput(w, earliestSafe));
+  const s = runState(w);
+  expect(s.birds.length).toBeGreaterThan(0);
+  expect([s.x, s.first, s.end]).toEqual([w.scroll, w.first, w.end]);
+  expect(s.birds).toEqual([...w.drift].sort((a, b) => a[0] - b[0]));
+});
+
+it('gives the last hit and the last skill with their steps, the night and the air jump', () => {
+  const w = solo();
+  steps(w, 10);
+  w.hitStep = 4;
+  w.hitPoint = { x: 60.5, y: 101 };
+  w.lastSkill = { id: 'speed', step: 7 };
+  w.night = 12;
+  w.trex.airJumpUsed = true;
+  expect(runState(w)).toMatchObject({
+    hit: { step: 4, x: 60.5, y: 101 }, skill: { id: 'speed', step: 7 }, night: 12, airJumped: true,
   });
 });
 

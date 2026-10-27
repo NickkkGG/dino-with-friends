@@ -27,5 +27,13 @@ export function runState(w: World): RunState {
     },
     got: w.boxIndex,
     spd: currentSpeed(w),
+    x: w.scroll,
+    first: w.first,
+    end: w.end,
+    birds: [...w.drift].sort((a, b) => a[0] - b[0]),
+    night: w.night,
+    airJumped: trex.airJumpUsed,
+    hit: w.hitStep === null || w.hitPoint === null ? null : { step: w.hitStep, x: w.hitPoint.x, y: w.hitPoint.y },
+    skill: w.lastSkill && { ...w.lastSkill },
   };
 }

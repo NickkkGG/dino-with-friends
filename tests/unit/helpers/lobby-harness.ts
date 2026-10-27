@@ -1,6 +1,14 @@
 import { LobbyCore } from '../../../shared/lobby/core';
 import type { LobbyEvent } from '../../../shared/lobby/core';
-import type { ClientMessage, ServerMessage } from '../../../shared/lobby/protocol';
+import type { ClientMessage, RunState, ServerMessage } from '../../../shared/lobby/protocol';
+
+/** A runner's state `t` ms into the round, `d` px along with `hp` hearts: on the ground by day, nothing hit or picked up. */
+export function runAt(t: number, d: number, hp = 3): { type: 'state' } & RunState {
+  return {
+    type: 'state', t, d, y: 93, pose: 'run', hp, hurt: 0, fx: { doubleJump: 0, ghost: 0, speed: 0 }, got: 0, spd: 6,
+    x: Math.floor(d), first: 0, end: 0, birds: [], night: 0, airJumped: false, hit: null, skill: null,
+  };
+}
 
 /**
  * A lobby with code K7RM2Q, its own clock from 1 000 000 and a mailbox per connection. Round seeds come from `seeds`

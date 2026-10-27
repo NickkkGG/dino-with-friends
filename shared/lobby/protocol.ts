@@ -1,4 +1,5 @@
-import { HP_MAX } from '../sim/constants';
+import type { SkillId } from '../sim/boxes';
+import { HP_MAX, NIGHT_STEPS, STEP_MS } from '../sim/constants';
 
 /** Where a lobby is: waiting for the host, counting down, racing, or showing the round's results. */
 export type LobbyPhase = 'lobby' | 'countdown' | 'playing' | 'results';
@@ -32,6 +33,21 @@ export interface RunState {
   got: number;
   /** The speed right now, in world px a step. */
   spd: number;
+  /** How far the ground has scrolled, in whole px. */
+  x: number;
+  /** The obstacles from first up to, but not including, end are in the world. */
+  first: number;
+  end: number;
+  /** How far each bird among them has flown on against the ground: [obstacle index, px], by index. */
+  birds: [number, number][];
+  /** The step of the night, from 1; 0 by day. */
+  night: number;
+  /** The air jump of the jump in progress has been used. */
+  airJumped: boolean;
+  /** The last hit that cost a heart: its step and where it was. Null before the first. */
+  hit: { step: number; x: number; y: number } | null;
+  /** The skill picked up last, and its step. Null before the first. */
+  skill: { id: SkillId; step: number } | null;
 }
 
 export type ClientMessage =
@@ -87,6 +103,12 @@ const HURT_MAX = 10_000;
 const FX_MAX = 60_000;
 const GOT_MAX = 10_000;
 const SPD_MAX = 100;
+const COURSE_MAX = 100_000;
+const BIRDS_MAX = 8;
+const DRIFT_LIMIT = 10_000;
+const HIT_LIMIT = 1000;
+/** The last step of the longest round. */
+const STEP_MAX = Math.round(T_MAX / STEP_MS);
 
 type Fields = Record<string, unknown>;
 
@@ -125,6 +147,7 @@ function oneOf<T extends string>(members: Record<T, true>): (value: unknown) => 
 
 const isPhase = oneOf<LobbyPhase>({ lobby: true, countdown: true, playing: true, results: true });
 const isPose = oneOf<Pose>({ run: true, duck: true, jump: true });
+const isSkillId = oneOf<SkillId>({ doubleJump: true, heart: true, ghost: true, speed: true });
 const isErrorCode = oneOf<ErrorCode>({
   LOBBY_NOT_FOUND: true,
   LOBBY_FULL: true,
@@ -146,8 +169,39 @@ function readList<T>(value: unknown, read: (item: unknown) => T | null): T[] | n
   return out;
 }
 
-function readRunState(m: Fields): ({ type: 'state' } & RunState) | null {
-  const { t, d, y, pose, hp, hurt, fx, got, spd } = m;
+/** A field that may be null: null when it is, what `read` makes of it otherwise, and undefined when that is wrong. */
+function readNullable<T>(value: unknown, read: (value: unknown) => T | null): T | null | undefined {
+  return value === null ? null : (read(value) ?? undefined);
+}
+
+// A bird among the obstacles in the world, and how far it has flown on.
+function readBird(value: unknown, first: number, end: number): [number, number] | null {
+  if (!Array.isArray(value)) return null;
+  const pair: readonly unknown[] = value;
+  const [index, drift] = pair;
+  return pair.length === 2 && isWhole(index, first, end - 1) && isWhole(drift, -DRIFT_LIMIT, DRIFT_LIMIT)
+    ? [index, drift]
+    : null;
+}
+
+function readHit(value: unknown): RunState['hit'] {
+  if (!isObject(value)) return null;
+  const { step, x, y } = value;
+  return isWhole(step, 0, STEP_MAX) && inRange(x, -HIT_LIMIT, HIT_LIMIT) && inRange(y, -HIT_LIMIT, HIT_LIMIT)
+    ? { step, x, y }
+    : null;
+}
+
+function readSkill(value: unknown): RunState['skill'] {
+  if (!isObject(value)) return null;
+  const { id, step } = value;
+  return isSkillId(id) && isWhole(step, 0, STEP_MAX) ? { id, step } : null;
+}
+
+/** The fields of a state, read the same way for a player's state and a relayed one; null when any is wrong. */
+export function readRunState(value: unknown): RunState | null {
+  if (!isObject(value)) return null;
+  const { t, d, y, pose, hp, hurt, fx, got, spd, x, first, end, night, airJumped } = value;
   if (!isObject(fx)) return null;
   const { doubleJump, ghost, speed } = fx;
   if (
@@ -161,11 +215,22 @@ function readRunState(m: Fields): ({ type: 'state' } & RunState) | null {
     !inRange(ghost, 0, FX_MAX) ||
     !inRange(speed, 0, FX_MAX) ||
     !isWhole(got, 0, GOT_MAX) ||
-    !inRange(spd, 0, SPD_MAX)
+    !inRange(spd, 0, SPD_MAX) ||
+    !isWhole(x, 0, D_MAX) ||
+    !isWhole(first, 0, COURSE_MAX) ||
+    !isWhole(end, first, COURSE_MAX) ||
+    !isWhole(night, 0, NIGHT_STEPS) ||
+    typeof airJumped !== 'boolean'
   ) {
     return null;
   }
-  return { type: 'state', t, d, y, pose, hp, hurt, fx: { doubleJump, ghost, speed }, got, spd };
+  const birds = Array.isArray(value.birds) && value.birds.length <= BIRDS_MAX
+    ? readList(value.birds, (item) => readBird(item, first, end))
+    : null;
+  const hit = readNullable(value.hit, readHit);
+  const skill = readNullable(value.skill, readSkill);
+  if (birds === null || hit === undefined || skill === undefined) return null;
+  return { t, d, y, pose, hp, hurt, fx: { doubleJump, ghost, speed }, got, spd, x, first, end, birds, night, airJumped, hit, skill };
 }
 
 /** A player's message, holding only its own fields, or null when it is anything else or out of bounds. */
@@ -180,8 +245,10 @@ export function parseClientMessage(raw: unknown): ClientMessage | null {
     }
     case 'start':
       return { type: 'start' };
-    case 'state':
-      return readRunState(m);
+    case 'state': {
+      const s = readRunState(m);
+      return s === null ? null : { type: 'state', ...s };
+    }
     case 'dead': {
       const { d } = m;
       return inRange(d, 0, D_MAX) ? { type: 'dead', d } : null;

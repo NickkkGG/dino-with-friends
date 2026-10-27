@@ -159,6 +159,16 @@ it('sends the death once and keeps GAME OVER without a restart button', () => {
   expect(gameOverParts(run)).toEqual({ text: true, button: false });
 });
 
+it('sends a last state with no hearts left, then the death', () => {
+  const { run, input, states, deaths } = setUp(); // nobody jumps: hit after hit until the last heart is gone
+  frameUntil(run, input, START, () => deaths.length === 1, 120_000);
+  const last = states.at(-1)!;
+  expect(last.hp).toBe(0); // only the state sent at the death has no hearts
+  expect(last.t).toBe(Math.round(run.world.step * STEP_MS));
+  expect(last.hit!.step).toBe(run.world.step);
+  expect(deaths[0]).toBe(last.d);
+});
+
 it('stops when the server says this player is out', () => {
   const { run, input, deaths } = setUp();
   for (const t of frameTimes(START, START + 1000)) run.frame(t, input);

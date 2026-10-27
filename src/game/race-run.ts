@@ -188,6 +188,8 @@ export class RaceRun {
     this.scene.step(w, ev);
     if (ev.died) {
       this.out();
+      // The ones watching see the crash and GAME OVER too: the state with no hearts goes before the death.
+      this.o.send.state(runState(w));
       this.o.send.dead(w.distance);
     }
   }

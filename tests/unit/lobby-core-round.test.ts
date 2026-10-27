@@ -1,16 +1,11 @@
 import { expect, it } from 'vitest';
 import { COUNTDOWN_MS, LobbyCore, alarmToSet } from '../../shared/lobby/core';
 import type { LobbyEvent, LobbyStep } from '../../shared/lobby/core';
-import { lobbyHarness } from './helpers/lobby-harness';
+import { lobbyHarness, runAt } from './helpers/lobby-harness';
 
 type Harness = ReturnType<typeof lobbyHarness>;
 
 // Every distance in these tests is under the cap for its time (21.45 a step), except in the test of the cap itself.
-const state = (t: number, d: number, hp = 3) =>
-  ({
-    type: 'state', t, d, y: 93, pose: 'run', hp, hurt: 0,
-    fx: { doubleJump: 0, ghost: 0, speed: 0 }, got: 0, spd: 6,
-  }) as const;
 
 /** NICK (c1, the host) and RARA (c2) start a round, and the clock is at its first step. */
 function race(h: Harness): void {
@@ -28,7 +23,7 @@ it('sends the tower at most every 250 ms', () => {
   const h = lobbyHarness();
   race(h);
   h.advance(100);
-  h.send('c1', state(100, 36));
+  h.send('c1', runAt(100, 36));
   for (const c of ['c1', 'c2']) {
     expect(h.last(c, 'tower')!.rows).toEqual([
       { id: 'p1', score: 1, hp: 3, alive: true },
@@ -37,10 +32,10 @@ it('sends the tower at most every 250 ms', () => {
   }
   h.clear();
   h.advance(100);
-  h.send('c1', state(200, 72, 2));
+  h.send('c1', runAt(200, 72, 2));
   expect(h.last('c2', 'tower')).toBeUndefined();
   h.advance(150);
-  h.send('c2', state(350, 40));
+  h.send('c2', runAt(350, 40));
   expect(h.last('c2', 'tower')!.rows).toEqual([
     { id: 'p1', score: 2, hp: 2, alive: true },
     { id: 'p2', score: 1, hp: 3, alive: true },
@@ -51,7 +46,7 @@ it('caps a distance that runs too far', () => {
   const h = lobbyHarness();
   race(h);
   h.advance(1000);
-  h.send('c1', state(1000, 99_999));
+  h.send('c1', runAt(1000, 99_999));
   // 60 steps × 13 × 1.5 × 1.1 = 1287, and scoreOf(1287) = 32
   expect(row(h, 'c1', 'p1')!.score).toBe(32);
   h.send('c2', { type: 'dead', d: 99_999 });
@@ -65,16 +60,16 @@ it('ignores a state before the round starts and from someone who is out', () => 
   h.send('c1', { type: 'start' });
   h.clear();
   h.advance(1000);
-  h.send('c1', state(100, 36));
+  h.send('c1', runAt(100, 36));
   expect(h.inbox('c1')).toEqual([]);
   h.advance(COUNTDOWN_MS - 1000);
   h.alarm();
   h.advance(1000);
   h.send('c2', { type: 'dead', d: 520 });
   h.advance(100);
-  h.send('c2', state(1100, 900));
+  h.send('c2', runAt(1100, 900));
   h.advance(300);
-  h.send('c1', state(1400, 100));
+  h.send('c1', runAt(1400, 100));
   expect(row(h, 'c1', 'p2')).toEqual({ id: 'p2', score: 13, hp: 0, alive: false });
 });
 
@@ -82,7 +77,7 @@ it('sends the tower at once when someone is out', () => {
   const h = lobbyHarness();
   race(h);
   h.advance(3000);
-  h.send('c1', state(3000, 2400));
+  h.send('c1', runAt(3000, 2400));
   h.clear();
   h.advance(10);
   h.send('c2', { type: 'dead', d: 2000 });
@@ -99,10 +94,10 @@ it('ends when the one left is ahead of every final score', () => {
   h.advance(3000);
   h.send('c2', { type: 'dead', d: 2000 }); // 50, under the cap for 3 s
   h.advance(100);
-  h.send('c1', state(3100, 2000)); // 50: not yet
+  h.send('c1', runAt(3100, 2000)); // 50: not yet
   expect(h.last('c1', 'end')).toBeUndefined();
   h.advance(100);
-  h.send('c1', state(3200, 2040)); // 51: over
+  h.send('c1', runAt(3200, 2040)); // 51: over
   expect(h.last('c2', 'end')).toEqual({
     type: 'end', round: 1,
     results: [
@@ -114,7 +109,7 @@ it('ends when the one left is ahead of every final score', () => {
   expect(h.wakeAt).toBe(h.now + 5000);
   h.clear();
   h.advance(100);
-  h.send('c1', state(3300, 2100));
+  h.send('c1', runAt(3300, 2100));
   h.send('c2', { type: 'dead', d: 2100 });
   expect(h.inbox('c1')).toEqual([]);
 });
@@ -152,7 +147,7 @@ it('counts a player out who leaves or drops mid-round, and still ends the round'
   const h = lobbyHarness();
   race(h);
   h.advance(1000);
-  h.send('c1', state(1000, 600));
+  h.send('c1', runAt(1000, 600));
   h.advance(100);
   h.close('c1');
   expect(h.last('c2', 'lobby')!.players).toEqual([
@@ -172,7 +167,7 @@ it('counts a player out who presses LEAVE mid-round', () => {
   const h = lobbyHarness();
   race(h);
   h.advance(1000);
-  h.send('c2', state(1000, 600));
+  h.send('c2', runAt(1000, 600));
   h.send('c2', { type: 'leave' });
   expect(h.closed).toEqual(['c2']);
   // RARA is out at 15, ahead of NICK's 0 while NICK still runs: not over until NICK is ahead.
@@ -208,7 +203,7 @@ it('counts a player out after 10 s without a state, from the alarm alone', () =>
   const startAt = h.now;
   for (let t = 100; t <= 9900; t += 100) {
     h.advance(100);
-    h.send('c1', state(t, t * 0.36));
+    h.send('c1', runAt(t, t * 0.36));
   }
   expect(h.wakeAt).toBe(startAt + 10_000); // c2 never sent a state
   h.advance(100);
@@ -223,8 +218,8 @@ it('keeps a runner in while their states come', () => {
   const startAt = h.now;
   for (let t = 1000; t <= 12_000; t += 1000) {
     h.advance(1000);
-    h.send('c1', state(t, t * 0.36));
-    h.send('c2', state(t, t * 0.3));
+    h.send('c1', runAt(t, t * 0.36));
+    h.send('c2', runAt(t, t * 0.3));
   }
   expect(row(h, 'c1', 'p1')!.alive).toBe(true);
   expect(row(h, 'c1', 'p2')!.alive).toBe(true);
@@ -239,7 +234,7 @@ it('lets a late player watch, then play the next round', () => {
   expect(h.inbox('c3').map((m) => m.type)).toEqual(['welcome', 'lobby', 'tower']);
   expect(h.last('c3', 'lobby')!.players.map((p) => p.playing)).toEqual([true, true, false]);
   expect(h.last('c3', 'tower')!.rows.map((r) => r.id)).toEqual(['p1', 'p2']);
-  h.send('c3', state(1000, 500));
+  h.send('c3', runAt(1000, 500));
   h.send('c3', { type: 'dead', d: 500 });
   expect(h.last('c1', 'tower')).toBeUndefined();
   h.send('c1', { type: 'dead', d: 400 });
@@ -260,10 +255,10 @@ it('picks up a round again after a restart', () => {
   h.advance(1000);
   h.send('c2', { type: 'dead', d: 520 });
   expect(h.core.takeDirty()).toBe(true);
-  h.send('c1', state(1000, 300));
+  h.send('c1', runAt(1000, 300));
   expect(h.core.takeDirty()).toBe(false);
   const copy = LobbyCore.restore(h.core.saved(), () => 1, h.now);
-  const ev: LobbyEvent = { kind: 'message', conn: 'c1', msg: state(1300, 400) };
+  const ev: LobbyEvent = { kind: 'message', conn: 'c1', msg: runAt(1300, 400) };
   const step = copy.handle(ev, h.now + 300);
   expect(step.send).toContainEqual({
     to: 'c2',
@@ -284,7 +279,7 @@ it('does not cut a run back to the distance last saved, after a restart', () => 
   const saved = h.core.saved(); // what storage holds: states alone do not change it
   h.advance(3000);
   const copy = LobbyCore.restore(saved, () => 1, h.now);
-  const step = copy.handle({ kind: 'message', conn: 'c1', msg: state(3000, 2040) }, h.now);
+  const step = copy.handle({ kind: 'message', conn: 'c1', msg: runAt(3000, 2040) }, h.now);
   expect(step.send).toContainEqual({
     to: 'c1',
     msg: {
@@ -363,8 +358,8 @@ it('sets the alarm a handful of times in a minute of racing, not once a state', 
   const lobby = raceWithAlarm(h);
   for (let t = 100; t <= 60_000; t += 100) {
     lobby.advance(100);
-    lobby.keep(h.send('c1', state(t, t * 0.36)));
-    lobby.keep(h.send('c2', state(t, t * 0.3)));
+    lobby.keep(h.send('c1', runAt(t, t * 0.36)));
+    lobby.keep(h.send('c2', runAt(t, t * 0.3)));
   }
   expect(h.core.saved().phase).toBe('playing');
   // One for the countdown, one for the start, then one each time it goes off, about every 10 s.
@@ -377,8 +372,8 @@ it('still counts a runner out 10 s after their last state, with the alarm only m
   const startAt = h.now;
   for (let t = 100; t < 40_000; t += 100) {
     lobby.advance(100);
-    lobby.keep(h.send('c1', state(t, t * 0.36)));
-    if (t <= 30_000) lobby.keep(h.send('c2', state(t, t * 0.3))); // RARA's last state is at 30 s
+    lobby.keep(h.send('c1', runAt(t, t * 0.36)));
+    if (t <= 30_000) lobby.keep(h.send('c2', runAt(t, t * 0.3))); // RARA's last state is at 30 s
   }
   expect(h.last('c1', 'end')).toBeUndefined();
   lobby.advance(100);
