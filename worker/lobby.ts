@@ -1,5 +1,5 @@
 import { DurableObject } from 'cloudflare:workers';
-import { LobbyCore } from '../shared/lobby/core';
+import { LobbyCore, alarmToSet } from '../shared/lobby/core';
 import type { LobbyEvent, LobbyStep, SavedLobby } from '../shared/lobby/core';
 import { parseClientMessage } from '../shared/lobby/protocol';
 import type { ServerMessage } from '../shared/lobby/protocol';
@@ -111,9 +111,10 @@ export class Lobby extends DurableObject<Env> {
     }
     const writes: Promise<unknown>[] = [];
     if (core.takeDirty()) writes.push(this.ctx.storage.put(STORAGE_KEY, core.saved()));
-    if (step.wakeAt !== this.alarmAt) {
-      this.alarmAt = step.wakeAt;
-      writes.push(step.wakeAt === null ? this.ctx.storage.deleteAlarm() : this.ctx.storage.setAlarm(step.wakeAt));
+    const alarm = alarmToSet(this.alarmAt, step.wakeAt);
+    if (alarm !== null) {
+      this.alarmAt = alarm;
+      writes.push(this.ctx.storage.setAlarm(alarm));
     }
     await Promise.all(writes);
   }

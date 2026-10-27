@@ -72,6 +72,26 @@ test('a friend who closes the page mid-race is out, and the race still ends', as
   await expect(page.getByTestId('result-row').nth(1)).toHaveAttribute('data-player-id', 'p2');
 });
 
+test('a race nobody sends to any more ends 10 s later, by the server alone', async ({ page, browser }) => {
+  test.setTimeout(90_000);
+  const [rara] = await startRace(page, browser, [{ name: 'RARA' }], BOT);
+  await until(page, 'window.__dwf?.race?.phase === "running" && window.__dwf.step > 120');
+  // As two phones gone to other apps: both pages stay connected, but they draw no frames, so they send no states, and
+  // nothing comes in that could end the round but the lobby's own alarm.
+  for (const p of [page, rara!]) {
+    await p.evaluate(() => {
+      window.requestAnimationFrame = () => 0;
+    });
+  }
+  const stopped = Date.now();
+  for (const p of [page, rara!]) {
+    await expect(p.getByTestId('results-screen')).toBeVisible({ timeout: 30_000 });
+    await expect(p.getByTestId('result-row')).toHaveCount(2);
+  }
+  expect(Date.now() - stopped).toBeGreaterThan(9_000);
+  await rara!.context().close();
+});
+
 test('the host leaving mid-race hands the lobby on', async ({ page, browser }) => {
   test.setTimeout(90_000);
   const rara = await openPlayer(browser, { name: 'RARA', query: BOT });

@@ -42,6 +42,16 @@ export interface LobbyStep {
   wakeAt: number | null;
 }
 
+/**
+ * The alarm to set after a step, given the one set now (null: none): the step's wakeAt when that is sooner, and null
+ * when the one set will do. An alarm only moves sooner, so a state, which pushes the soonest stale time a little later,
+ * costs no write; one that goes off early does no harm, since the lobby goes by the clock on every alarm and says then
+ * when to wake next.
+ */
+export function alarmToSet(set: number | null, wakeAt: number | null): number | null {
+  return wakeAt !== null && (set === null || wakeAt < set) ? wakeAt : null;
+}
+
 export interface SavedPlayer {
   id: string;
   conn: string;

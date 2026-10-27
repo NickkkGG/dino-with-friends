@@ -1,6 +1,6 @@
 import { expect, it } from 'vitest';
-import { COUNTDOWN_MS, LobbyCore } from '../../shared/lobby/core';
-import type { LobbyEvent } from '../../shared/lobby/core';
+import { COUNTDOWN_MS, LobbyCore, alarmToSet } from '../../shared/lobby/core';
+import type { LobbyEvent, LobbyStep } from '../../shared/lobby/core';
 import { lobbyHarness } from './helpers/lobby-harness';
 
 type Harness = ReturnType<typeof lobbyHarness>;
@@ -306,4 +306,83 @@ it('gives a round restored in its countdown the whole 10 s from its start', () =
   h.advance(1000);
   const copy = LobbyCore.restore(h.core.saved(), () => 1, h.now);
   expect(copy.handle({ kind: 'alarm' }, startAt).wakeAt).toBe(startAt + 10_000);
+});
+
+/**
+ * The lobby with one alarm, kept as its Durable Object keeps it: set from each step's wakeAt through alarmToSet, and
+ * going off once the clock gets there. `sets` counts the alarms set, each of them a storage write for the object.
+ */
+function withAlarm(h: Harness) {
+  let at: number | null = null;
+  let sets = 0;
+  const keep = (step: LobbyStep) => {
+    const next = alarmToSet(at, step.wakeAt);
+    if (next === null) return;
+    at = next;
+    sets += 1;
+  };
+  return {
+    get sets() {
+      return sets;
+    },
+    keep,
+    /** Moves the clock on by `ms`, with the alarm going off on the way when it comes due. */
+    advance(ms: number) {
+      const to = h.now + ms;
+      while (at !== null && at <= to) {
+        h.advance(at - h.now);
+        at = null;
+        keep(h.alarm());
+      }
+      h.advance(to - h.now);
+    },
+  };
+}
+
+/** NICK and RARA start a round in a lobby that keeps its alarm, and the clock is at its first step. */
+function raceWithAlarm(h: Harness) {
+  const lobby = withAlarm(h);
+  lobby.keep(h.hello('c1', 'NICK'));
+  lobby.keep(h.hello('c2', 'RARA'));
+  lobby.keep(h.send('c1', { type: 'start' }));
+  lobby.advance(COUNTDOWN_MS);
+  return lobby;
+}
+
+it('moves an alarm only sooner', () => {
+  expect(alarmToSet(null, 5000)).toBe(5000);
+  expect(alarmToSet(9000, 5000)).toBe(5000);
+  expect(alarmToSet(5000, 9000)).toBeNull();
+  expect(alarmToSet(5000, 5000)).toBeNull();
+  expect(alarmToSet(5000, null)).toBeNull();
+  expect(alarmToSet(null, null)).toBeNull();
+});
+
+it('sets the alarm a handful of times in a minute of racing, not once a state', () => {
+  const h = lobbyHarness();
+  const lobby = raceWithAlarm(h);
+  for (let t = 100; t <= 60_000; t += 100) {
+    lobby.advance(100);
+    lobby.keep(h.send('c1', state(t, t * 0.36)));
+    lobby.keep(h.send('c2', state(t, t * 0.3)));
+  }
+  expect(h.core.saved().phase).toBe('playing');
+  // One for the countdown, one for the start, then one each time it goes off, about every 10 s.
+  expect(lobby.sets).toBeLessThanOrEqual(10);
+});
+
+it('still counts a runner out 10 s after their last state, with the alarm only moving sooner', () => {
+  const h = lobbyHarness();
+  const lobby = raceWithAlarm(h);
+  const startAt = h.now;
+  for (let t = 100; t < 40_000; t += 100) {
+    lobby.advance(100);
+    lobby.keep(h.send('c1', state(t, t * 0.36)));
+    if (t <= 30_000) lobby.keep(h.send('c2', state(t, t * 0.3))); // RARA's last state is at 30 s
+  }
+  expect(h.last('c1', 'end')).toBeUndefined();
+  lobby.advance(100);
+  expect(h.now - startAt).toBe(40_000);
+  expect(row(h, 'c1', 'p2')).toMatchObject({ alive: false });
+  expect(h.last('c1', 'end')).toBeDefined(); // NICK is ahead of RARA's final score
 });
