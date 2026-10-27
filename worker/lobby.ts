@@ -1,8 +1,10 @@
 import { DurableObject } from 'cloudflare:workers';
-import { LobbyCore, alarmToSet } from '../shared/lobby/core';
+import { LobbyCore } from '../shared/lobby/core';
 import type { LobbyEvent, LobbyStep, SavedLobby } from '../shared/lobby/core';
 import { parseClientMessage } from '../shared/lobby/protocol';
 import type { ServerMessage } from '../shared/lobby/protocol';
+import { applyStep } from './apply-step';
+import type { StepStorage } from './apply-step';
 import type { Env } from './env';
 
 const STORAGE_KEY = 'lobby';
@@ -22,11 +24,18 @@ function connOf(ws: WebSocket): string {
 
 /**
  * One lobby. Its rules are a LobbyCore; the runtime keeps its players' sockets open while the object sleeps between
- * messages, the lobby's state is in storage for when it wakes, and its timers are one alarm.
+ * messages, the lobby's state is in storage for when it wakes, and its timers are one alarm. A lobby left empty for
+ * long enough wipes itself, and is no lobby any more.
  */
 export class Lobby extends DurableObject<Env> {
   private core: LobbyCore | null = null;
   private alarmAt: number | null = null;
+  private readonly storage: StepStorage = {
+    put: (saved) => this.ctx.storage.put(STORAGE_KEY, saved),
+    setAlarm: (at) => this.ctx.storage.setAlarm(at),
+    deleteAlarm: () => this.ctx.storage.deleteAlarm(),
+    deleteAll: () => this.ctx.storage.deleteAll(),
+  };
 
   constructor(ctx: DurableObjectState, env: Env) {
     super(ctx, env);
@@ -36,6 +45,8 @@ export class Lobby extends DurableObject<Env> {
       // A deploy or a restart ends every socket without a close event: the seats whose sockets are gone are away now.
       const open = new Set(ctx.getWebSockets().map(connOf));
       if (saved) this.core = LobbyCore.restore(saved, { seeds, tokens, version: __BUILD_VERSION__ }, Date.now(), open);
+      // What fell due while the object slept is dealt with at once.
+      await this.run({ kind: 'alarm' });
     });
   }
 
@@ -43,7 +54,7 @@ export class Lobby extends DurableObject<Env> {
   async create(code: string): Promise<boolean> {
     if (this.core) return false;
     this.core = new LobbyCore({ code, seeds, tokens, version: __BUILD_VERSION__, now: Date.now() });
-    await this.ctx.storage.put(STORAGE_KEY, this.core.saved());
+    await this.run({ kind: 'alarm' }); // saves the new lobby, and sets the alarm for when it is left empty
     return true;
   }
 
@@ -97,30 +108,9 @@ export class Lobby extends DurableObject<Env> {
   private async apply(core: LobbyCore, step: LobbyStep): Promise<void> {
     const sockets = new Map<string, WebSocket>();
     for (const ws of this.ctx.getWebSockets()) sockets.set(connOf(ws), ws);
-    const texts = new Map<ServerMessage, string>();
-    for (const { to, msg } of step.send) {
-      const text = texts.get(msg) ?? JSON.stringify(msg);
-      texts.set(msg, text);
-      try {
-        sockets.get(to)?.send(text);
-      } catch {
-        // The socket is closing; its close event comes next.
-      }
-    }
-    for (const conn of step.close) {
-      try {
-        sockets.get(conn)?.close(1000, 'bye');
-      } catch {
-        // Closed already.
-      }
-    }
-    const writes: Promise<unknown>[] = [];
-    if (core.takeDirty()) writes.push(this.ctx.storage.put(STORAGE_KEY, core.saved()));
-    const alarm = alarmToSet(this.alarmAt, step.wakeAt);
-    if (alarm !== null) {
-      this.alarmAt = alarm;
-      writes.push(this.ctx.storage.setAlarm(alarm));
-    }
-    await Promise.all(writes);
+    const { alarmAt, done } = applyStep({ sockets, storage: this.storage, core, step, alarmAt: this.alarmAt });
+    this.alarmAt = alarmAt;
+    if (step.expired) this.core = null;
+    await done;
   }
 }

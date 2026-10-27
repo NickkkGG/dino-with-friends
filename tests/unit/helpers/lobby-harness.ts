@@ -31,6 +31,7 @@ export function lobbyHarness(seeds: readonly number[] = [111, 222, 333]) {
   const inboxes = new Map<string, ServerMessage[]>();
   let now = 1_000_000;
   let wakeAt: number | null = null;
+  let expired = false;
   const run = (ev: LobbyEvent) => {
     const step = core.handle(ev, now);
     for (const { to, msg } of step.send) {
@@ -40,6 +41,7 @@ export function lobbyHarness(seeds: readonly number[] = [111, 222, 333]) {
     }
     h.closed.push(...step.close);
     wakeAt = step.wakeAt;
+    expired = step.expired;
     return step;
   };
   const h = {
@@ -52,6 +54,10 @@ export function lobbyHarness(seeds: readonly number[] = [111, 222, 333]) {
     /** When the last event asked to be woken. */
     get wakeAt() {
       return wakeAt;
+    },
+    /** Whether the last event found the lobby gone, after too long with nobody connected. */
+    get expired() {
+      return expired;
     },
     advance: (ms: number) => void (now += ms),
     send: (conn: string, msg: ClientMessage) => run({ kind: 'message', conn, msg }),

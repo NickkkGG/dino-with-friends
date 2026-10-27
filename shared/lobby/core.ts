@@ -22,6 +22,12 @@ export const TOWER_MS = 250;
 /** How long a runner may go without sending a state before they are out. */
 export const STALE_MS = 10_000;
 
+/** How long a seat whose connection dropped is kept. */
+export const SEAT_MS = 120_000;
+
+/** How long a lobby with nobody connected lives. */
+export const EMPTY_MS = 600_000;
+
 /** What can happen to a lobby: a message, a message that could not be read, a connection closing, or its alarm. */
 export type LobbyEvent =
   | { kind: 'message'; conn: string; msg: ClientMessage }
@@ -35,11 +41,15 @@ export interface Send {
   msg: ServerMessage;
 }
 
-/** What an event leads to: the messages to send, the connections to close, and when to wake next (null: no need). */
+/**
+ * What an event leads to: the messages to send, the connections to close, and when to wake next (null: no need); or,
+ * when nobody has been connected for EMPTY_MS, that the lobby is gone.
+ */
 export interface LobbyStep {
   send: Send[];
   close: string[];
   wakeAt: number | null;
+  expired: boolean;
 }
 
 /**
@@ -102,6 +112,8 @@ export interface SavedLobby {
   players: SavedPlayer[];
   runners: SavedRunner[];
   results: ResultRow[];
+  /** Since when nobody has been connected; null while someone is. */
+  emptySince: number | null;
 }
 
 /** A runner as the round keeps them: what is saved, plus the round time of their last state and when it came. */
@@ -129,7 +141,9 @@ export class LobbyCore {
   private players: SavedPlayer[] = [];
   private runners: Runner[] = [];
   private results: ResultRow[] = [];
-  private dirty = false;
+  private emptySince: number | null;
+  // A new lobby has to be saved: it is a lobby from now on.
+  private dirty = true;
   private lastTowerAt = -Infinity;
   private towerDue = false;
   private out: Send[] = [];
@@ -140,6 +154,7 @@ export class LobbyCore {
     this.seeds = o.seeds;
     this.tokens = o.tokens;
     this.version = o.version;
+    this.emptySince = o.now;
   }
 
   /**
@@ -148,6 +163,7 @@ export class LobbyCore {
    */
   static restore(saved: SavedLobby, o: Omit<LobbyOptions, 'code' | 'now'>, now: number, open: ReadonlySet<string>): LobbyCore {
     const core = new LobbyCore({ ...o, code: saved.code, now });
+    core.dirty = false;
     core.nextJoin = saved.nextJoin;
     core.round = saved.round;
     core.phase = saved.phase;
@@ -155,12 +171,19 @@ export class LobbyCore {
     core.startAt = saved.startAt;
     core.endsAt = saved.endsAt;
     core.players = saved.players.map((p) => {
+      // A seat saved by the build before seats had tokens has none: it is away from now on, and cannot be taken back.
+      if (typeof p.connected !== 'boolean') {
+        core.dirty = true;
+        return { ...p, token: '', connected: false, awaySince: now };
+      }
       if (open.has(p.conn) || !p.connected) return { ...p };
       core.dirty = true;
       return { ...p, connected: false, awaySince: now };
     });
     core.runners = saved.runners.map((r) => ({ ...r, t: 0, lastStateAt: Math.max(now, saved.startAt) }));
     core.results = saved.results.map((r) => ({ ...r }));
+    core.emptySince = saved.emptySince ?? (core.players.some((p) => p.connected) ? null : now);
+    if (core.emptySince !== saved.emptySince) core.dirty = true;
     return core;
   }
 
@@ -168,6 +191,7 @@ export class LobbyCore {
     this.out = [];
     this.toClose = [];
     this.towerDue = false;
+    this.freeSeats(now);
     switch (ev.kind) {
       case 'message':
         this.onMessage(ev.conn, ev.msg, now);
@@ -185,7 +209,11 @@ export class LobbyCore {
     if (this.phase === 'playing') this.dropStale(now);
     if (this.towerDue) this.sendTower(now);
     if (this.inRound() && roundOver(this.standings())) this.finish(now);
-    return { send: this.out, close: this.toClose, wakeAt: this.wakeAt() };
+    this.noteEmpty(now);
+    if (ev.kind === 'alarm' && this.emptySince !== null && now - this.emptySince >= EMPTY_MS) {
+      return { send: [], close: [], wakeAt: null, expired: true };
+    }
+    return { send: this.out, close: this.toClose, wakeAt: this.wakeAt(), expired: false };
   }
 
   saved(): SavedLobby {
@@ -208,6 +236,7 @@ export class LobbyCore {
         hp,
       })),
       results: this.results.map((r) => ({ ...r })),
+      emptySince: this.emptySince,
     };
   }
 
@@ -313,11 +342,22 @@ export class LobbyCore {
     this.sendLobby();
   }
 
-  /** A player who leaves by LEAVE. One who is in the round is out with the distance they had, and stays on the board. */
+  /** A player who leaves by LEAVE. */
   private remove(conn: string, now: number): void {
     const gone = this.playerOn(conn);
-    if (!gone) return;
-    const runner = this.aliveRunnerOn(conn);
+    if (gone) this.removeSeat(gone, now);
+  }
+
+  /** Seats away for SEAT_MS are freed, as by LEAVE. */
+  private freeSeats(now: number): void {
+    for (const seat of this.players.filter((p) => p.awaySince !== null && now - p.awaySince >= SEAT_MS)) {
+      this.removeSeat(seat, now);
+    }
+  }
+
+  /** A seat gone for good. One in the round is out with the distance they had, and stays on the board. */
+  private removeSeat(gone: SavedPlayer, now: number): void {
+    const runner = this.runners.find((r) => r.id === gone.id && r.alive);
     this.players = this.players.filter((p) => p !== gone);
     if (gone.host) this.handHost();
     this.dirty = true;
@@ -422,7 +462,26 @@ export class LobbyCore {
     }
   }
 
+  /** Since when nobody has been connected: from when the last one connected dropped or left. */
+  private noteEmpty(now: number): void {
+    const since = this.players.some((p) => p.connected) ? null : (this.emptySince ?? now);
+    if (since === this.emptySince) return;
+    this.emptySince = since;
+    this.dirty = true;
+  }
+
+  /** The soonest of the phase's own time, a seat to free and the lobby's end, if nobody is connected. */
   private wakeAt(): number | null {
+    let soonest = this.phaseWakeAt();
+    const sooner = (at: number) => {
+      if (soonest === null || at < soonest) soonest = at;
+    };
+    for (const p of this.players) if (p.awaySince !== null) sooner(p.awaySince + SEAT_MS);
+    if (this.emptySince !== null) sooner(this.emptySince + EMPTY_MS);
+    return soonest;
+  }
+
+  private phaseWakeAt(): number | null {
     switch (this.phase) {
       case 'lobby':
         return null;
