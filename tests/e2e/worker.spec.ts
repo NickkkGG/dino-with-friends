@@ -10,6 +10,12 @@ interface Talk {
   now: number;
 }
 
+// The build the page says it is, once the game has made its debug hook: right after the page loads it may not have.
+async function versionOf(page: Page): Promise<string> {
+  const v = await page.waitForFunction(() => window.__dwf?.version);
+  return (await v.jsonValue()) as string;
+}
+
 // Opens a WebSocket to a lobby from the page, sends `send` once it is open, and gathers what comes back until a
 // message of type `until` arrives or the socket closes.
 function talk(page: Page, code: string, send: object[], until: string): Promise<Talk> {
@@ -56,7 +62,7 @@ test('a lobby address wants a WebSocket and a real code', async ({ request }) =>
 test('a lobby welcomes a player over a WebSocket and answers a ping', async ({ page, request }) => {
   const { code } = (await (await request.post('/api/lobby')).json()) as { code: string };
   await page.goto('/');
-  const v = await page.evaluate(() => window.__dwf!.version);
+  const v = await versionOf(page);
   const got = await talk(page, code, [{ type: 'hello', v, name: 'nick', token: null }, { type: 'ping', c: 1 }], 'pong');
   expect(got.messages[0]).toEqual({ type: 'welcome', you: 'p1', token: expect.stringMatching(/^[0-9a-f-]{36}$/), code });
   expect(got.messages[1]).toEqual({
@@ -79,7 +85,7 @@ test('a hello from another build is told VERSION_MISMATCH and closed', async ({ 
 test('a token brings the same seat back on a new socket', async ({ page, request }) => {
   const { code } = (await (await request.post('/api/lobby')).json()) as { code: string };
   await page.goto('/');
-  const v = await page.evaluate(() => window.__dwf!.version);
+  const v = await versionOf(page);
   const first = await talk(page, code, [{ type: 'hello', v, name: 'nick', token: null }], 'welcome'); // closes after it
   const { token } = first.messages[0] as { token: string };
   const again = await talk(page, code, [{ type: 'hello', v, name: 'nick', token }], 'lobby');
