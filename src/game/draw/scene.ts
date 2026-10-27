@@ -84,6 +84,11 @@ export class Scene {
     this.o = { ...this.o, hud, showScore, showHi };
   }
 
+  /** The effects on show, by name, as Effects.active() has them. */
+  effectsOn(): string[] {
+    return this.effects.active();
+  }
+
   reset(): void {
     this.clouds.reset();
     this.night.reset();

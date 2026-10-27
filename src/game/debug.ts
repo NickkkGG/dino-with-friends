@@ -20,6 +20,8 @@ export interface GameDebug {
   canvas: { width: number; height: number; cssWidth: number; k: number; sprite: 1 | 2 } | null;
   /** A race on the screen: its phase and countdown, when it starts and the server's clock now. */
   race?: { phase: RaceView['phase']; count: RaceView['count']; startAt: number; serverNow: number };
+  /** Another runner's screen, watched: whose, and how far its ground has scrolled. */
+  watch?: { target: string; scroll: number };
 }
 
 /** The lobby this page is in, as the tests see it. */
