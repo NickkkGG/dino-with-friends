@@ -67,6 +67,22 @@ for (const landscape of [false, true]) {
       await shoot(page, info, `solo-running${tag}`);
     });
 
+    test('solo at the start of SPEED, safe as a ghost', async ({ page }, info) => {
+      await page.goto('/?view=solo&seed=7&autopilot=1&box=speed');
+      // Stopped, as when the page loses focus, on a step with the dino on the ground and more than the last second of
+      // the safe start left, so it shows dotted and not blinking.
+      await page.evaluate(async () => {
+        const frame = () => new Promise((r) => requestAnimationFrame(r));
+        const ready = () => {
+          const d = window.__dwf;
+          return d?.skills && d.trex && d.skills.speed > 120 && !d.trex.jumping;
+        };
+        while (!ready()) await frame();
+        window.dispatchEvent(new Event('blur'));
+      });
+      await shoot(page, info, `solo-speed${tag}`);
+    });
+
     test('solo hurt', async ({ page }, info) => {
       await page.goto('/?view=solo&seed=7');
       await startRound(page);

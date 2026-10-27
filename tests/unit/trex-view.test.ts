@@ -1,5 +1,5 @@
 import { expect, it } from 'vitest';
-import { STEP_MS } from '../../shared/sim/constants';
+import { SKILL_STEPS, STEP_MS } from '../../shared/sim/constants';
 import { NO_INPUT, createWorld, stepWorld } from '../../shared/sim/world';
 import type { StepInput, World, WorldOptions } from '../../shared/sim/world';
 import { TrexView } from '../../src/game/draw/trex-view';
@@ -83,6 +83,18 @@ it('trex pose: low row with one heart while running; ghost flag while GHOST, bli
   const ghost = run(w, view, 210);
   ghost.forEach((p, i) => {
     const left = Math.max(0, 200 - 1 - i); // skillRemaining after the step
+    expect(p.ghost, `left ${left}`).toBe(left > 0);
+    expect(p.visible, `left ${left}`).toBe(left === 0 || left > 60 || Math.floor(left / 6) % 2 === 0);
+  });
+});
+
+it('trex pose: the ghost look through the first 120 steps of SPEED too, blinking in the last 60 of them', () => {
+  const w = world();
+  const view = new TrexView(() => 0.5);
+  w.skillUntil.speed = w.step + SKILL_STEPS.speed; // as a box picked up on the step before gives it
+  const poses = run(w, view, 130);
+  poses.forEach((p, i) => {
+    const left = Math.max(0, 120 - 1 - i); // what is left of the safe start after the step
     expect(p.ghost, `left ${left}`).toBe(left > 0);
     expect(p.visible, `left ${left}`).toBe(left === 0 || left > 60 || Math.floor(left / 6) % 2 === 0);
   });

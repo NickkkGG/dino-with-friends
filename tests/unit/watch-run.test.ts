@@ -3,7 +3,7 @@ import type { RunState } from '../../shared/lobby/protocol';
 import { botInput, earliestSafe } from '../../shared/sim/autopilot';
 import { STEP_MS, TREX_X, WORLD_W } from '../../shared/sim/constants';
 import {
-  NO_INPUT, cloneWorld, createWorld, isHurt, pendingBox, skillRemaining, stepWorld, visibleObstacles,
+  NO_INPUT, cloneWorld, createWorld, isHurt, pendingBox, skillRemaining, speedSafeRemaining, stepWorld, visibleObstacles,
 } from '../../shared/sim/world';
 import type { StepInput, World } from '../../shared/sim/world';
 import { STATE_EVERY_STEPS, runState } from '../../src/game/run-state';
@@ -123,6 +123,19 @@ it('shows a hit at its own step: a heart less, the hurt face and the spark', () 
   expect(run.world.hp).toBe(a.hp - 1);
   expect(isHurt(run.world)).toBe(true);
   expect(run.scene.effectsOn()).toContain('spark');
+});
+
+it("has the safe start of SPEED where the runner's own world has it, so it looks the same", () => {
+  const sent = played({ steps: 20_000, input: bot, invincible: true });
+  const i = sent.findIndex(({ at }, j) => j > 0 && speedSafeRemaining(at) > 0);
+  expect(i).toBeGreaterThan(0); // the runner took SPEED
+  const { s, at } = sent[i]!;
+  const run = watcher();
+  run.add(sent[i - 1]!.s);
+  run.add(s);
+  run.frame(shownAt(s));
+  expect(run.world.step).toBe(at.step);
+  expect(speedSafeRemaining(run.world)).toBe(speedSafeRemaining(at));
 });
 
 it('takes a box at its own step: the box is gone and its label is up', () => {

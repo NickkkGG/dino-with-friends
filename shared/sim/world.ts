@@ -9,7 +9,8 @@ import { findCollision, overlapCenter, touchesBox } from './collision';
 import type { Box } from './collision';
 import {
   ACHIEVEMENT_SCORE, BOX_SIZE, BOX_Y, CLEAR_STEPS, HP_MAX, HP_START, HURT_STEPS, INTRO_STEPS, INVULN_STEPS, NIGHT_SCORE,
-  NIGHT_STEPS, SKILL_STEPS, SLOW_MIN, SLOW_RECOVER_STEPS, SPEED_SKILL_MULTIPLIER, SPEED_START, TREX_X, WORLD_W,
+  NIGHT_STEPS, SKILL_STEPS, SLOW_MIN, SLOW_RECOVER_STEPS, SPEED_SAFE_STEPS, SPEED_SKILL_MULTIPLIER, SPEED_START, TREX_X,
+  WORLD_W,
 } from './constants';
 import { Course } from './course';
 import type { CourseObstacle } from './course';
@@ -244,6 +245,11 @@ export function skillRemaining(w: World, id: 'doubleJump' | 'ghost' | 'speed'): 
   return Math.max(0, w.skillUntil[id] - w.step);
 }
 
+/** How many steps are left of the safe start of SPEED, in which obstacles pass through the dino as through a ghost. */
+export function speedSafeRemaining(w: World): number {
+  return Math.max(0, skillRemaining(w, 'speed') - (SKILL_STEPS.speed - SPEED_SAFE_STEPS));
+}
+
 // Where the left edge of an obstacle is on the player's screen: it is fixed in the course, the ground scrolls it past,
 // and a bird flies on against the ground by its drift.
 function screenX(w: World, o: CourseObstacle): number {
@@ -339,13 +345,14 @@ function moveObstacles(w: World, v: number): void {
 }
 
 // The dino against the first obstacle in the world, the only one tested, as in the original. A touch costs a heart
-// unless the dino is invincible, protected after a hit, or a ghost; the last heart ends the round.
+// unless the dino is invincible, protected after a hit, a ghost, or in the safe start of SPEED; the last heart ends the
+// round.
 function checkCollision(w: World, ev: StepEvents): void {
   if (w.first >= w.end) return;
   const pair = findCollision(w.trex, viewOf(w, w.first));
   if (!pair) return;
   ev.overlap = true;
-  if (w.opts.invincible || isInvulnerable(w) || skillRemaining(w, 'ghost') > 0) return;
+  if (w.opts.invincible || isInvulnerable(w) || skillRemaining(w, 'ghost') > 0 || speedSafeRemaining(w) > 0) return;
   w.hp -= 1;
   w.hitStep = w.step;
   const point = overlapCenter(pair);

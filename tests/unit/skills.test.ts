@@ -2,7 +2,7 @@ import { expect, it } from 'vitest';
 import type { SkillBox } from '../../shared/sim/boxes';
 import { SKILL_STEPS } from '../../shared/sim/constants';
 import {
-  NO_INPUT, cloneWorld, createWorld, currentSpeed, pendingBox, skillRemaining, stepWorld,
+  NO_INPUT, cloneWorld, createWorld, currentSpeed, pendingBox, skillRemaining, speedSafeRemaining, stepWorld,
 } from '../../shared/sim/world';
 import type { StepEvents, StepInput, World, WorldOptions } from '../../shared/sim/world';
 
@@ -123,6 +123,27 @@ it('GHOST lets the dino pass obstacles for 300 steps without damage', () => {
   expect(evs.some((e) => e.hit !== null)).toBe(false);
   expect([w.hp, skillRemaining(w, 'ghost')]).toEqual([3, 0]);
   runUntil(w, (e) => e.hit !== null); // once the ghost is gone, a touch costs a heart again
+  expect(w.hp).toBe(2);
+});
+
+it('SPEED lets obstacles pass through the dino for its first 120 steps, as GHOST does, then a touch costs a heart', () => {
+  const picked = world({ forcedSkill: 'speed' });
+  runToPickup(picked);
+  expect(speedSafeRemaining(picked)).toBe(120); // the first 2 of its 3 s
+  // The first step an obstacle touches a dino that stands still; SPEED starts a second before it, so the faster dino
+  // meets that obstacle within its first 120 steps.
+  const probe = world({ boxes: false });
+  runUntil(probe, (e) => e.overlap);
+  const touch = probe.step - 1;
+  const w = world({ boxes: false });
+  run(w, touch - 60);
+  w.opts.invincible = false; // from here on an obstacle would cost a heart
+  w.skillUntil.speed = w.step + SKILL_STEPS.speed; // as a box picked up on the step before gives it
+  const evs = run(w, 120);
+  expect(evs.some((e) => e.overlap)).toBe(true);
+  expect(evs.some((e) => e.hit !== null)).toBe(false);
+  expect([w.hp, speedSafeRemaining(w), skillRemaining(w, 'speed')]).toEqual([3, 0, 60]);
+  runUntil(w, (e) => e.hit !== null); // after that, a touch costs a heart again
   expect(w.hp).toBe(2);
 });
 

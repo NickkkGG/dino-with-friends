@@ -54,6 +54,9 @@ export const SKILL_STEPS: Readonly<{ doubleJump: number; ghost: number; speed: n
   speed: 180,
 };
 export const SPEED_SKILL_MULTIPLIER = 1.5;
+// The first 2 s of SPEED's 3, in which obstacles pass through the dino as through a ghost: the faster obstacles come
+// sooner than the player has learnt to expect.
+export const SPEED_SAFE_STEPS = 120;
 export const LABEL_STEPS = 48;
 
 // Boxes

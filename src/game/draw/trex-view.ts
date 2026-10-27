@@ -1,10 +1,10 @@
 // Copyright 2024 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the third_party/chromium/LICENSE file.
-// Modified for DINO with FRIENDS: Trex.update, blink and draw as a view of the world's dino: its status comes from the world, time from 60 Hz steps, the frame timer restarts with each status, and the waiting dino blinks without end; plus the hurt and low-heart faces, blinking after a hit and at the end of GHOST, and a dotted GHOST.
+// Modified for DINO with FRIENDS: Trex.update, blink and draw as a view of the world's dino: its status comes from the world, time from 60 Hz steps, the frame timer restarts with each status, and the waiting dino blinks without end; plus the hurt and low-heart faces, blinking after a hit and at the end of GHOST, and a dotted GHOST, which the safe start of SPEED looks like too.
 
 import { HURT_STEPS, INVULN_STEPS, STEP_MS, TREX_H, TREX_W, TREX_W_DUCK } from '../../../shared/sim/constants';
-import { isHurt, skillRemaining, stepsSinceHit } from '../../../shared/sim/world';
+import { isHurt, skillRemaining, speedSafeRemaining, stepsSinceHit } from '../../../shared/sim/world';
 import type { World } from '../../../shared/sim/world';
 import { blit } from './context';
 import type { DrawContext } from './context';
@@ -101,7 +101,8 @@ export class TrexView {
     if (!crashed && isHurt(w)) row = 'hurt';
     else if (!crashed && w.hp === 1 && w.phase === 'running') row = 'low';
     const since = stepsSinceHit(w);
-    const ghostLeft = skillRemaining(w, 'ghost');
+    // GHOST, or the safe start of SPEED: either way obstacles pass through the dino, and it looks the same.
+    const ghostLeft = Math.max(skillRemaining(w, 'ghost'), speedSafeRemaining(w));
     let visible = true;
     if (since >= HURT_STEPS && since < INVULN_STEPS) visible = Math.floor((since - HURT_STEPS) / BLINK_STEPS) % 2 === 0;
     if (ghostLeft > 0 && ghostLeft <= GHOST_WARN_STEPS && Math.floor(ghostLeft / BLINK_STEPS) % 2 !== 0) visible = false;
