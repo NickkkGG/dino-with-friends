@@ -1,6 +1,6 @@
 import { expect, it } from 'vitest';
 import {
-  HUD_STRIP, PEEK_COLUMN, SKY, boardHeightCells, menuSizes, raceLayout, soloLayout, titleLayout,
+  HUD_STRIP, PEEK_COLUMN, SKY, boardHeightCells, menuSizes, menuSpacing, raceLayout, soloLayout, titleLayout,
 } from '../../src/game/layout';
 import type { RaceLayout, TitleLayout } from '../../src/game/layout';
 
@@ -93,6 +93,19 @@ it('sizes the menu text for a phone and a laptop', () => {
   expect(menuSizes(390)).toEqual({ title: 2.5, body: 2, small: 1.5, code: 5 });
   expect(menuSizes(1440)).toEqual({ title: 3, body: 2, small: 1.5, code: 6 });
   expect([menuSizes(599).title, menuSizes(600).title]).toEqual([2.5, 3]);
+});
+
+it('spaces a menu screen out on a laptop and an upright phone, and closes it up on a phone on its side', () => {
+  const roomy = { top: 56, bottom: 24, gap: 18, strip: 720 };
+  expect(menuSpacing(1440, 900)).toEqual(roomy);
+  expect(menuSpacing(390, 844)).toEqual(roomy);
+  const side = menuSpacing(844, 390);
+  expect(side).toMatchObject({ top: 16, bottom: 12, gap: 10 });
+  // The idle strip, a quarter as high as it is wide inside its 16 px sides, takes at most 15% of the height.
+  expect((side.strip - 32) / 4).toBeCloseTo(0.15 * 390);
+  expect(menuSpacing(667, 375).strip).toBeCloseTo(32 + 0.6 * 375);
+  // A short window too narrow for the column to miss the corner buttons keeps the room above it.
+  expect(menuSpacing(500, 500)).toEqual(roomy);
 });
 
 it('measures the tower in cells: a title, then 12 a line', () => {

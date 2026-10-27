@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import type { ReactNode } from 'react';
+import { menuSpacing } from '../game/layout';
 import type { Sound } from '../game/sound';
 import type { SpriteSet } from '../game/sprites';
 import { PixelText } from '../ui/PixelText';
@@ -20,18 +21,21 @@ export interface MenuScreenProps {
 // The middle column is at most this wide on a phone held upright (narrower than 600) and on anything wider.
 const COLUMN_PHONE = 360;
 const COLUMN_WIDE = 480;
-// The idle strip at the bottom is at most this wide, with 16 px on each side.
-const STRIP = 720;
 
-/** The window's width in CSS pixels, kept current. */
-export function useViewportWidth(): number {
-  const [vw, setVw] = useState(() => window.innerWidth);
+/** The window's size in CSS pixels, kept current. */
+export function useViewportSize(): { w: number; h: number } {
+  const [size, setSize] = useState(() => ({ w: window.innerWidth, h: window.innerHeight }));
   useEffect(() => {
-    const onResize = () => setVw(window.innerWidth);
+    const onResize = () => setSize({ w: window.innerWidth, h: window.innerHeight });
     window.addEventListener('resize', onResize);
     return () => window.removeEventListener('resize', onResize);
   }, []);
-  return vw;
+  return size;
+}
+
+/** The window's width in CSS pixels, kept current. */
+export function useViewportWidth(): number {
+  return useViewportSize().w;
 }
 
 const BLINK_MS = 500;
@@ -51,7 +55,9 @@ export function useBlink(): boolean {
  * short for it), the idle strip along the bottom, and the speaker.
  */
 export function MenuScreen({ testId, sprites, sound, back, hop = false, children }: MenuScreenProps) {
-  const phone = useViewportWidth() < 600;
+  const { w, h } = useViewportSize();
+  const phone = w < 600;
+  const room = menuSpacing(w, h);
   return (
     <div data-testid={testId} className="menu-screen">
       {back && (
@@ -60,11 +66,14 @@ export function MenuScreen({ testId, sprites, sound, back, hop = false, children
         </button>
       )}
       <div className="menu-middle">
-        <div className="menu-column" style={{ maxWidth: phone ? COLUMN_PHONE : COLUMN_WIDE }}>
+        <div
+          className="menu-column"
+          style={{ maxWidth: phone ? COLUMN_PHONE : COLUMN_WIDE, paddingTop: room.top, paddingBottom: room.bottom, gap: room.gap }}
+        >
           {children}
         </div>
       </div>
-      <div className="menu-strip" style={{ maxWidth: STRIP }}>
+      <div className="menu-strip" style={{ maxWidth: room.strip }}>
         <IdleStrip sprites={sprites} hop={hop} />
       </div>
       <MuteButton sound={sound} />

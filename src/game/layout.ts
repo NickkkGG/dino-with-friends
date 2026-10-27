@@ -130,6 +130,31 @@ export function menuSizes(vw: number): MenuSizes {
   return vw < 600 ? { title: 2.5, body: 2, small: 1.5, code: 5 } : { title: 3, body: 2, small: 1.5, code: 6 };
 }
 
+/** The room in a menu screen, in CSS pixels: above and below its column, between the column's parts, and the idle strip's width. */
+export interface MenuSpacing {
+  top: number;
+  bottom: number;
+  gap: number;
+  strip: number;
+}
+
+// The idle strip is at most this wide, with 16 px on each side; on a phone on its side it takes at most this share of
+// the height (its world is a quarter as high as it is wide).
+const STRIP_MAX = 720;
+const STRIP_SIDE = 16;
+const STRIP_SHARE = 0.15;
+
+/**
+ * A menu screen's room for a window `vw` × `vh` CSS pixels. A short window that is wide enough for the column to miss
+ * the corner buttons (a phone on its side) closes the column up and makes the idle strip smaller, so the screen fits
+ * without scrolling.
+ */
+export function menuSpacing(vw: number, vh: number): MenuSpacing {
+  if (vh >= SHORT || vw < 600) return { top: 56, bottom: 24, gap: 18, strip: STRIP_MAX };
+  const strip = Math.min(STRIP_MAX, 2 * STRIP_SIDE + (WORLD_W / WORLD_H) * STRIP_SHARE * vh);
+  return { top: 16, bottom: 12, gap: 10, strip };
+}
+
 /** The leaderboard in cells of its text: a line is `width` wide and `row` high, under a title `title` high. */
 export const BOARD_CELLS = { width: 140, row: 12, title: 11 } as const;
 
