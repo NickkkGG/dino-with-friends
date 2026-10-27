@@ -64,7 +64,9 @@ export function RaceScreen({ sprites, sound, testMode, view, session }: RaceScre
     });
     game.current = g;
     g.start();
+    // The race screen closes when the round ends: the run ends with it, and a best score it was making is kept.
     return () => {
+      g.end();
       g.dispose();
       game.current = null;
     };

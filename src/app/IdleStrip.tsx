@@ -3,8 +3,11 @@ import { IdleRun } from '../game/demo';
 import type { SpriteSet } from '../game/sprites';
 import { useDevicePixelRatio } from '../ui/PixelText';
 
-/** The original's waiting dino, blinking, with clouds drifting by: as wide as the column it sits in. */
-export function IdleStrip({ sprites }: { sprites: SpriteSet }) {
+/**
+ * The original's waiting dino, blinking, with clouds drifting by: as wide as the column it sits in. With `hop` the dino
+ * hops now and then, as the winner does on the results screen.
+ */
+export function IdleStrip({ sprites, hop = false }: { sprites: SpriteSet; hop?: boolean }) {
   const wrap = useRef<HTMLDivElement>(null);
   const canvas = useRef<HTMLCanvasElement>(null);
   const run = useRef<IdleRun | null>(null);
@@ -12,14 +15,14 @@ export function IdleStrip({ sprites }: { sprites: SpriteSet }) {
   const dpr = useDevicePixelRatio();
 
   useEffect(() => {
-    const r = new IdleRun({ canvas: canvas.current!, sprites });
+    const r = new IdleRun({ canvas: canvas.current!, sprites, hop });
     run.current = r;
     r.start();
     return () => {
       r.dispose();
       run.current = null;
     };
-  }, [sprites]);
+  }, [sprites, hop]);
 
   useLayoutEffect(() => {
     const el = wrap.current!;

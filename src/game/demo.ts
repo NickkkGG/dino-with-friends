@@ -1,6 +1,7 @@
 import { botInput, earliestSafe } from '../../shared/sim/autopilot';
-import { CLEAR_STEPS, TREX_X, WORLD_H, WORLD_W } from '../../shared/sim/constants';
+import { CLEAR_STEPS, SPEED_START, TREX_X, WORLD_H, WORLD_W } from '../../shared/sim/constants';
 import { constantTimeline } from '../../shared/sim/timeline';
+import { endJump, startJump, updateJump } from '../../shared/sim/trex';
 import { NO_EVENTS, createWorld, stepWorld } from '../../shared/sim/world';
 import type { StepEvents, World } from '../../shared/sim/world';
 import { PAPER } from './colors';
@@ -50,6 +51,21 @@ export function idleWorld(): World {
   const w = createWorld({ seed: 1, playerId: 'idle', phase: 'waiting', boxes: false, nightMode: false });
   w.trex.x = TREX_X;
   return w;
+}
+
+/** The winner's dino on the results screen hops every this many steps: 1.25 s. */
+export const HOP_EVERY_STEPS = 75;
+
+/**
+ * Step `n` of the idle strip's dino, which only moves to hop: with `hop` it jumps every HOP_EVERY_STEPS steps and lets
+ * go at once, as a quick tap does, so each jump ends as soon as it is high enough to count. The world itself is never
+ * stepped, so it stays waiting and no round begins.
+ */
+export function idleStep(w: World, n: number, hop: boolean): void {
+  const t = w.trex;
+  if (hop && n % HOP_EVERY_STEPS === 0) startJump(t, SPEED_START);
+  updateJump(t);
+  if (hop) endJump(t);
 }
 
 interface Canvas2D {
@@ -129,19 +145,25 @@ export class DemoRun {
   }
 }
 
-/** The strip under the credits: clouds drifting 1 px every 3 steps over the ground, and the dino waiting, blinking. */
+/**
+ * The strip under the menu screens: clouds drifting 1 px every 3 steps over the ground, and the dino waiting, blinking,
+ * or on the results screen hopping.
+ */
 export class IdleRun {
   private readonly canvas: HTMLCanvasElement;
   private readonly sprites: SpriteSet;
+  private readonly hop: boolean;
   private readonly world = idleWorld();
   private readonly scene = new Scene({ sky: 0, hud: 'none', showScore: false, showHi: false, introClip: false, idleClouds: true });
   private readonly loop: FixedStepLoop;
   private main: Canvas2D | null = null;
+  private steps = 0;
 
-  constructor(o: { canvas: HTMLCanvasElement; sprites: SpriteSet }) {
+  constructor(o: { canvas: HTMLCanvasElement; sprites: SpriteSet; hop?: boolean }) {
     this.canvas = o.canvas;
     this.sprites = o.sprites;
-    this.loop = new FixedStepLoop(() => this.scene.step(this.world, NO_EVENTS), () => this.render());
+    this.hop = o.hop ?? false;
+    this.loop = new FixedStepLoop(() => this.step(), () => this.render());
   }
 
   setSize(cssWidth: number, dpr: number): void {
@@ -155,6 +177,12 @@ export class IdleRun {
 
   dispose(): void {
     this.loop.stop();
+  }
+
+  private step(): void {
+    idleStep(this.world, this.steps, this.hop);
+    this.steps += 1;
+    this.scene.step(this.world, NO_EVENTS);
   }
 
   private render(): void {

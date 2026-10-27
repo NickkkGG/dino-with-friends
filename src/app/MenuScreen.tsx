@@ -12,6 +12,8 @@ export interface MenuScreenProps {
   sound: Sound;
   /** The way back, in the top left corner. */
   back?: { label: string; onClick(): void; testId: string };
+  /** The idle strip's dino hops, as the winner on the results screen. */
+  hop?: boolean;
   children: ReactNode;
 }
 
@@ -48,7 +50,7 @@ export function useBlink(): boolean {
  * A menu screen: the way back in the top left, the screen's own column in the middle (scrolling if the window is too
  * short for it), the idle strip along the bottom, and the speaker.
  */
-export function MenuScreen({ testId, sprites, sound, back, children }: MenuScreenProps) {
+export function MenuScreen({ testId, sprites, sound, back, hop = false, children }: MenuScreenProps) {
   const phone = useViewportWidth() < 600;
   return (
     <div data-testid={testId} className="menu-screen">
@@ -63,7 +65,7 @@ export function MenuScreen({ testId, sprites, sound, back, children }: MenuScree
         </div>
       </div>
       <div className="menu-strip" style={{ maxWidth: STRIP }}>
-        <IdleStrip sprites={sprites} />
+        <IdleStrip sprites={sprites} hop={hop} />
       </div>
       <MuteButton sound={sound} />
     </div>

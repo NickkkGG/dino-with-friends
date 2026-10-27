@@ -12,6 +12,7 @@ import { LobbyScreen } from './LobbyScreen';
 import { MultiplayerScreen } from './MultiplayerScreen';
 import { NameScreen } from './NameScreen';
 import { RaceScreen } from './RaceScreen';
+import { ResultsScreen } from './ResultsScreen';
 
 /** Where the player's name is kept on the device. */
 export const NAME_KEY = 'dwf.name';
@@ -21,7 +22,7 @@ export interface MultiplayerFlowProps {
   sound: Sound;
   testMode: TestMode;
   onExit(): void;
-  /** Told which screen is on show: name, multiplayer, lobby or race. */
+  /** Told which screen is on show: name, multiplayer, lobby, race or results. */
   onScreen(screen: string): void;
 }
 
@@ -36,8 +37,9 @@ function useSessionView(session: LobbySession | null): SessionView | null {
 
 /**
  * Everything after MULTIPLAYER on the title: YOUR NAME the first time, then MULTIPLAYER, where a lobby is made or
- * joined, the lobby once the server has said welcome, and the race from the countdown to the end of the round. A lobby
- * that fails takes the player back to MULTIPLAYER with what went wrong.
+ * joined, the lobby once the server has said welcome, the race from the countdown to the end of the round, and its
+ * results until the player goes back to the lobby. A lobby that fails takes the player back to MULTIPLAYER with what
+ * went wrong.
  */
 export function MultiplayerFlow({ sprites, sound, testMode, onExit, onScreen }: MultiplayerFlowProps) {
   const [name, setName] = useState(() => cleanName(readText(NAME_KEY, '')));
@@ -45,6 +47,8 @@ export function MultiplayerFlow({ sprites, sound, testMode, onExit, onScreen }: 
   const [session, setSession] = useState<LobbySession | null>(null);
   const [creating, setCreating] = useState(false);
   const [error, setError] = useState<SessionError | null>(null);
+  // The last round whose results the player has left.
+  const [closed, setClosed] = useState(0);
   const view = useSessionView(session);
   // Kept in refs as well, so a second click in the same moment, before React has rendered, sees them.
   const busy = useRef(false);
@@ -65,6 +69,7 @@ export function MultiplayerFlow({ sprites, sound, testMode, onExit, onScreen }: 
     const s = new LobbySession({ code, name });
     current.current = s;
     setSession(s);
+    setClosed(0); // a new lobby counts its rounds from 1
     s.connect();
   };
 
@@ -112,12 +117,18 @@ export function MultiplayerFlow({ sprites, sound, testMode, onExit, onScreen }: 
   }, [session]);
 
   const inLobby = session !== null && view?.status === 'joined';
-  const racing = inLobby && (view.phase === 'countdown' || view.phase === 'playing');
-  const screen = racing ? 'race' : inLobby ? 'lobby' : naming ? 'name' : 'multiplayer';
+  // The results of a round stay until the player leaves them; one who comes in while they are on goes to the lobby.
+  const results = inLobby && view.end !== null && view.end.round > closed ? view.end : null;
+  const racing = inLobby && results === null && (view.phase === 'countdown' || view.phase === 'playing');
+  const screen = results ? 'results' : racing ? 'race' : inLobby ? 'lobby' : naming ? 'name' : 'multiplayer';
   useEffect(() => onScreen(screen), [screen, onScreen]);
 
-  if (racing) return <RaceScreen sprites={sprites} sound={sound} testMode={testMode} view={view} session={session} />;
   if (inLobby) {
+    if (results) {
+      const back = () => setClosed(results.round);
+      return <ResultsScreen sprites={sprites} sound={sound} end={results} you={view.you} onBack={back} />;
+    }
+    if (racing) return <RaceScreen sprites={sprites} sound={sound} testMode={testMode} view={view} session={session} />;
     const leave = () => {
       session.leave();
       close();
