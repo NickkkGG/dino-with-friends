@@ -1,6 +1,8 @@
 # DINO with FRIENDS
 
-A web remake of the offline dino game from Chromium, built for phones and laptops. It keeps the original look, physics, and sounds, and adds hearts, "?" skill boxes, a title screen with a demo run, and a sound switch. It is a work in progress: stage 1 is solo play, and online multiplayer with friends comes in later stages.
+A web remake of the offline dino game from Chromium, built for phones and laptops. It keeps the original look, physics, and sounds, and adds hearts, "?" skill boxes, a title screen with a demo run, and a sound switch. It is a work in progress: you can play solo now, and multiplayer with friends is on the way.
+
+Play it at https://dino-with-friends.nicknelsoon30.workers.dev.
 
 ## Controls
 
@@ -30,6 +32,7 @@ Open http://localhost:5173. To play on a phone, join the same Wi-Fi network as t
 - **The drawing** lives in [`src/game/draw/`](src/game/draw/), ported from the original game. It reads the world after each step and draws it from the original sprite sheets.
 - **Crisp pixels:** every canvas is drawn at a whole number of device pixels per game pixel, from the 1x or the 2x sprite sheet, and the browser scales it the last bit to the screen's size with pixelated scaling, so the pixels stay sharp instead of blurring.
 - **The screens** around the game (title, credits, buttons) are React components in [`src/app/`](src/app/).
+- **Hosting:** Cloudflare builds every push to `main` with `npm run build` and serves the files in `dist/` as a Worker ([`wrangler.jsonc`](wrangler.jsonc)).
 
 ## Tests
 
