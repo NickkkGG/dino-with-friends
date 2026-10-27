@@ -4,8 +4,8 @@ import { typeConfig } from '../../shared/sim/obstacle-types';
 import { BASE_TIMELINE, constantTimeline } from '../../shared/sim/timeline';
 import { createTrex } from '../../shared/sim/trex';
 import {
-  NO_INPUT, cloneWorld, createWorld, currentSpeed, isHurt, isInvulnerable, resumeAfterPause, skillRemaining, stepWorld,
-  stepsSinceHit, visibleObstacles,
+  NO_INPUT, cloneWorld, createWorld, currentSpeed, isHurt, isInvulnerable, resumeAfterPause, retire, skillRemaining,
+  skipSteps, stepWorld, stepsSinceHit, visibleObstacles,
 } from '../../shared/sim/world';
 import type { StepEvents, StepInput, World, WorldOptions } from '../../shared/sim/world';
 
@@ -532,4 +532,32 @@ it('resumeAfterPause puts the dino back on the ground', () => {
   expect(w.trex.ducking).toBe(true);
   resumeAfterPause(w);
   expect(w.trex).toEqual(createTrex(24));
+});
+
+it('skips steps without moving anything, while the clock-based effects still run out', () => {
+  const w = solo();
+  run(w, 60);
+  w.skillUntil.speed = w.step + 100;
+  const before = cloneWorld(w);
+  skipSteps(w, 120);
+  expect(w.step).toBe(180);
+  expect({ ...w, step: before.step }).toEqual(before); // the ground, the obstacles, the dino and the distance stay
+  expect(skillRemaining(w, 'speed')).toBe(0);
+  expect(currentSpeed(w)).toBeCloseTo(BASE_TIMELINE.speedAt(180), 9);
+});
+
+it('skips nothing in a world that is not running', () => {
+  const waiting = solo({ phase: 'waiting' });
+  skipSteps(waiting, 50);
+  expect(waiting.step).toBe(0);
+});
+
+it('lets a round go when the server says it is over', () => {
+  const w = solo();
+  run(w, 30);
+  retire(w);
+  expect([w.phase, w.hp]).toEqual(['dead', 3]);
+  const before = cloneWorld(w);
+  expect(stepWorld(w, JUMP)).toEqual(QUIET);
+  expect(w).toEqual(before);
 });

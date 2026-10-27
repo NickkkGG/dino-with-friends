@@ -1,7 +1,7 @@
 // Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the third_party/chromium/LICENSE file.
-// Modified for DINO with FRIENDS: Runner.update's running part as a fixed 60 Hz step of plain state with no drawing or sound, plus hearts, a slowdown after a hit and the wait and intro.
+// Modified for DINO with FRIENDS: Runner.update's running part as a fixed 60 Hz step of plain state with no drawing or sound, plus hearts, a slowdown after a hit, the wait and intro, and skipped steps and a round ended from outside for a race.
 
 import { BoxPlan } from './boxes';
 import type { SkillBox, SkillId } from './boxes';
@@ -273,6 +273,20 @@ export function pendingBox(w: World): { box: SkillBox; x: number } | null {
 /** Puts the dino back on the ground, for when a paused round goes on. Nothing else about the world changes. */
 export function resumeAfterPause(w: World): void {
   resetTrex(w.trex);
+}
+
+/**
+ * Moves a running round's step number on by `n` and nothing else, for a race that has fallen too far behind the shared
+ * clock: the ground, the obstacles, the dino and the distance stay. What counts from the step number (the safe time
+ * after a hit, the slowdown and the skills) runs out through the skipped steps as it would have.
+ */
+export function skipSteps(w: World, n: number): void {
+  if (w.phase === 'running') w.step += n;
+}
+
+/** Ends the round for a player the lobby has counted out: no events, and the hearts stay as they are. */
+export function retire(w: World): void {
+  w.phase = 'dead';
 }
 
 // What the player pressed, before the physics. The jump is dealt with first, so a dino that is ducking cannot jump
