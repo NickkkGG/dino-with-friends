@@ -2,8 +2,10 @@ import { copyFileSync, mkdirSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { expect, test } from '@playwright/test';
 import type { Page, TestInfo } from '@playwright/test';
+import { makeCode } from '../../shared/lobby/code';
+import { BOT, createLobby, joinLobby, named, openPlayer, startRace } from './players';
 
-// Screenshots of every screen and a short video, for checking the game by eye. They go to shots/, which git ignores.
+// Screenshots of every screen and two short videos, for checking the game by eye. They go to shots/, which git ignores.
 
 const SHOTS = fileURLToPath(new URL('../../shots/', import.meta.url));
 const isPhone = (project: string) => project.endsWith('-phone');
@@ -115,6 +117,77 @@ for (const landscape of [false, true]) {
       await page.waitForTimeout(600);
       await shoot(page, info, `credits${tag}`);
     });
+
+    test('multiplayer: YOUR NAME', async ({ page }, info) => {
+      await page.goto('/');
+      await page.getByTestId('btn-multiplayer').click();
+      await page.getByTestId('name-input').pressSequentially('NICK');
+      await page.waitForTimeout(300);
+      await shoot(page, info, `mp-name${tag}`);
+    });
+
+    test('multiplayer: LOBBY NOT FOUND', async ({ page }, info) => {
+      await named(page, 'NICK');
+      await page.goto('/');
+      await page.getByTestId('btn-multiplayer').click();
+      await page.getByTestId('code-input').fill(makeCode((n) => Math.floor(Math.random() * n)));
+      await page.getByTestId('btn-join').click();
+      await page.getByTestId('mp-error').waitFor();
+      await shoot(page, info, `mp-not-found${tag}`);
+    });
+
+    test('multiplayer: the lobby, for the host and for a friend', async ({ page, browser }, info) => {
+      await named(page, 'NICK');
+      await page.goto('/');
+      const code = await createLobby(page);
+      const friend = await openPlayer(browser, { name: 'RARA' });
+      await joinLobby(friend, code);
+      await expect(page.getByTestId('players-count')).toHaveText('PLAYERS 2/8');
+      await page.waitForTimeout(300);
+      await shoot(page, info, `mp-lobby-host${tag}`);
+      await friend.context().close();
+      // A lobby RARA makes, which NICK joins.
+      const host = await openPlayer(browser, { name: 'RARA' });
+      const other = await createLobby(host);
+      await page.goto('/');
+      await joinLobby(page, other);
+      await page.waitForTimeout(300);
+      await shoot(page, info, `mp-lobby-friend${tag}`);
+      await host.context().close();
+    });
+
+    test('multiplayer: the countdown', async ({ page, browser }, info) => {
+      const [friend] = await startRace(page, browser, [{ name: 'RARA', query: BOT }]);
+      await until(page, 'window.__dwf.race && window.__dwf.race.count === 3');
+      await page.waitForTimeout(400);
+      await shoot(page, info, `mp-countdown${tag}`);
+      await friend!.context().close();
+    });
+
+    test('multiplayer: a race of two', async ({ page, browser }, info) => {
+      const [friend] = await startRace(page, browser, [{ name: 'RARA', query: BOT }], '?autopilot=1');
+      await until(page, "window.__dwf.race && window.__dwf.race.phase === 'running' && window.__dwf.step > 240 && window.__dwf.trex.jumping", 40_000);
+      await shoot(page, info, `mp-race${tag}`);
+      await friend!.context().close();
+    });
+
+    test('multiplayer: GAME OVER while the others run on', async ({ page, browser }, info) => {
+      test.setTimeout(120_000);
+      const friends = await startRace(page, browser, [{ name: 'RARA', query: BOT }, { name: 'TOTO', query: BOT }]);
+      await until(page, "window.__dwf.phase === 'dead'", 90_000);
+      await page.waitForTimeout(1500); // GAME OVER is up
+      await shoot(page, info, `mp-over${tag}`);
+      for (const f of friends) await f.context().close();
+    });
+
+    test('multiplayer: the results', async ({ page, browser }, info) => {
+      test.setTimeout(120_000);
+      const [friend] = await startRace(page, browser, [{ name: 'RARA' }], BOT);
+      await page.getByTestId('results-screen').waitFor({ timeout: 90_000 });
+      await page.waitForTimeout(300);
+      await shoot(page, info, `mp-results${tag}`);
+      await friend!.context().close();
+    });
   });
 }
 
@@ -134,4 +207,21 @@ test('20 s of the autopilot, on video', async ({ browser }, info) => {
   await context.close();
   mkdirSync(SHOTS, { recursive: true });
   copyFileSync(await video.path(), `${SHOTS}${info.project.name}-run.webm`);
+});
+
+test('20 s of a race of two, on video', async ({ browser }, info) => {
+  test.skip(info.project.name !== 'chromium-desktop', 'one laptop');
+  test.setTimeout(90_000);
+  const { viewport } = info.project.use;
+  const dir = info.outputPath('video');
+  const context = await browser.newContext({ ...info.project.use, recordVideo: { dir, size: viewport ?? undefined } });
+  const page = await context.newPage();
+  const [friend] = await startRace(page, browser, [{ name: 'RARA', query: BOT }], BOT);
+  await until(page, "window.__dwf.race && window.__dwf.race.phase === 'running'");
+  await page.waitForTimeout(20_000);
+  const video = page.video()!;
+  await context.close();
+  await friend!.context().close();
+  mkdirSync(SHOTS, { recursive: true });
+  copyFileSync(await video.path(), `${SHOTS}${info.project.name}-race.webm`);
 });

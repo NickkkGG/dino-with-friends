@@ -1,6 +1,6 @@
 # DINO with FRIENDS
 
-A web remake of the offline dino game from Chromium, built for phones and laptops. It keeps the original look, physics, and sounds, and adds hearts, "?" skill boxes, a title screen with a demo run, and a sound switch. It is a work in progress: you can play solo now, and multiplayer with friends is on the way.
+A web remake of the offline dino game from Chromium, built for phones and laptops. It keeps the original look, physics, and sounds, and adds hearts, "?" skill boxes, a title screen with a demo run, and a sound switch. Play it solo, or race your friends: everyone in a lobby runs the same course at the same moment, and a 6-character code is all it takes to join.
 
 Play it at https://dino-with-friends.nicknelsoon30.workers.dev.
 
@@ -14,6 +14,16 @@ Play it at https://dino-with-friends.nicknelsoon30.workers.dev.
 | Restart after GAME OVER    | Space, ↑ or a click after 1.2 s; Enter at once | Tap after 1.2 s    |
 
 MENU goes back to the title screen, and the speaker in the top right corner switches the sound on and off. The best score and the sound setting are remembered in the browser.
+
+## Play with friends
+
+1. Choose MULTIPLAYER on the title screen and type your name. It is remembered for next time.
+2. Choose CREATE LOBBY and share the code that comes up (TAP TO COPY copies it).
+3. Your friends choose MULTIPLAYER, type the code under JOIN WITH CODE, and choose JOIN.
+4. The host, who made the lobby, presses START. Everyone counts down together and runs the same course, and the tower in the top left corner shows who is ahead.
+5. The round is over when everyone is out, or when the one still running is ahead of all the others. After the results everyone is back in the lobby, ready for the next round.
+
+A lobby holds up to 8 players. A friend who comes in during a round watches the tower and plays the next one.
 
 ## Run locally
 
@@ -31,8 +41,11 @@ Open http://localhost:5173. To play on a phone, join the same Wi-Fi network as t
 - **The rules** live in [`shared/sim/`](shared/sim/): a deterministic simulation that moves in fixed 60 Hz steps and draws its course and its boxes from a seeded random generator, with no browser code in it. The same seed gives the same run everywhere; the tests check that Node, Chromium, and WebKit agree.
 - **The drawing** lives in [`src/game/draw/`](src/game/draw/), ported from the original game. It reads the world after each step and draws it from the original sprite sheets.
 - **Crisp pixels:** every canvas is drawn at a whole number of device pixels per game pixel, from the 1x or the 2x sprite sheet, and the browser scales it the last bit to the screen's size with pixelated scaling, so the pixels stay sharp instead of blurring.
-- **The screens** around the game (title, credits, buttons) are React components in [`src/app/`](src/app/).
-- **Hosting:** Cloudflare builds every push to `main` with `npm run build` and serves the files in `dist/` as a Worker ([`wrangler.jsonc`](wrangler.jsonc)).
+- **The screens** around the game (title, credits, lobby, race, results, buttons) are React components in [`src/app/`](src/app/).
+- **The lobby rules** live in [`shared/lobby/`](shared/lobby/): who is in a lobby and who is the host, the countdown, the tower and the results, as a plain state machine that the client and the server share and that is tested without a server.
+- **The lobby server** is a Cloudflare Worker with a Durable Object, `Lobby`, for each lobby, in [`worker/`](worker/). The players' WebSockets stay open on the object while it sleeps between messages, and a round runs on the server's clock, which every browser keeps in step with.
+- **On a laptop**, `npm run dev` runs the Worker and the Durable Object too, through the Cloudflare plugin for Vite, so a phone on the same Wi-Fi can join a race through the laptop's LAN address.
+- **Hosting:** Cloudflare builds every push to `main` with `npm run build` and serves the files in `dist/` as a Worker ([`wrangler.jsonc`](wrangler.jsonc)). The same Worker answers `/api/lobby` and `/ws/…`, where the lobbies are.
 
 ## Tests
 

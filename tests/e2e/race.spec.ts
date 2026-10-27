@@ -1,30 +1,9 @@
 import { expect, test } from '@playwright/test';
-import type { Browser, Page } from '@playwright/test';
-import { createLobby, joinLobby, named, openPlayer, until } from './players';
+import type { Page } from '@playwright/test';
+import { BOT, openPlayer, rowOf, startRace, until } from './players';
 
 // A round of the race, in the dev build with the lobby server running locally. NICK plays on the project's own screen,
 // makes the lobby and starts the round; the others join it in windows of their own.
-
-interface Friend {
-  name: string;
-  query?: string;
-}
-
-/** NICK makes a lobby on `page`, the friends join it, and NICK starts the round. Gives the friends' pages. */
-async function startRace(page: Page, browser: Browser, friends: Friend[], query = ''): Promise<Page[]> {
-  await named(page, 'NICK');
-  await page.goto(`/${query}`);
-  const code = await createLobby(page);
-  const pages: Page[] = [];
-  for (const f of friends) {
-    const p = await openPlayer(browser, f);
-    await joinLobby(p, code);
-    pages.push(p);
-  }
-  await expect(page.getByTestId('players-count')).toHaveText(`PLAYERS ${friends.length + 1}/8`);
-  await page.getByTestId('btn-start').click();
-  return pages;
-}
 
 /** Every number the countdown on `p` shows from now until the round runs, in order. */
 function countsSeen(p: Page): Promise<number[]> {
@@ -63,8 +42,6 @@ function offClock(p: Page): Promise<number> {
   );
 }
 
-const rowOf = (p: Page, id: string) => p.locator(`[data-testid="board-row"][data-player-id="${id}"]`);
-
 test('the host starts: everyone counts down together and runs on the same clock', async ({ page, browser }) => {
   const [friend] = await startRace(page, browser, [{ name: 'RARA' }]);
   const both = [page, friend!];
@@ -93,8 +70,7 @@ test('the host starts: everyone counts down together and runs on the same clock'
 test('a dino that is out stays on GAME OVER while the tower keeps going', async ({ page, browser }) => {
   test.setTimeout(120_000);
   // Two who cannot lose keep the round going once NICK is out; one alone, and ahead of NICK, would end it there.
-  const bot = '?autopilot=1&invincible=1';
-  const friends = await startRace(page, browser, [{ name: 'RARA', query: bot }, { name: 'TOTO', query: bot }]);
+  const friends = await startRace(page, browser, [{ name: 'RARA', query: BOT }, { name: 'TOTO', query: BOT }]);
   await until(page, 'window.__dwf?.phase === "dead"', 90_000);
   await expect(rowOf(page, 'p1')).toHaveAttribute('data-alive', 'false');
   const board = page.getByTestId('race-board');
@@ -128,9 +104,6 @@ test('the race screen keeps the tower and the track apart', async ({ page, brows
   }
   await friend!.context().close();
 });
-
-// A bot that cannot lose: NICK, who plays nothing, is out first, and the bot ahead of him wins the round there and then.
-const BOT = '?autopilot=1&invincible=1';
 
 test('a full race: results, the winner, and back to the lobby for round 2', async ({ page, browser }) => {
   test.setTimeout(120_000);

@@ -39,3 +39,33 @@ export async function joinLobby(page: Page, code: string): Promise<void> {
 export function until(page: Page, condition: string, timeout = 10_000): Promise<unknown> {
   return page.waitForFunction(condition, undefined, { timeout });
 }
+
+/** The query that makes a player a bot that cannot lose: it jumps by itself, and nothing costs it a heart. */
+export const BOT = '?autopilot=1&invincible=1';
+
+export interface Friend {
+  name: string;
+  query?: string;
+}
+
+/**
+ * NICK makes a lobby on `page` (with `query` on its address), the friends join it in windows of their own, and NICK
+ * starts the round. Gives the friends' pages.
+ */
+export async function startRace(page: Page, browser: Browser, friends: Friend[], query = ''): Promise<Page[]> {
+  await named(page, 'NICK');
+  await page.goto(`/${query}`);
+  const code = await createLobby(page);
+  const pages: Page[] = [];
+  for (const f of friends) {
+    const p = await openPlayer(browser, f);
+    await joinLobby(p, code);
+    pages.push(p);
+  }
+  await expect(page.getByTestId('players-count')).toHaveText(`PLAYERS ${friends.length + 1}/8`);
+  await page.getByTestId('btn-start').click();
+  return pages;
+}
+
+/** The line of player `id` on the race's tower. */
+export const rowOf = (page: Page, id: string) => page.locator(`[data-testid="board-row"][data-player-id="${id}"]`);
