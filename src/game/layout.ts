@@ -1,4 +1,5 @@
 import { WORLD_H, WORLD_W } from '../../shared/sim/constants';
+import { FONT_ROWS } from '../ui/font';
 
 export interface Rect {
   x: number;
@@ -135,4 +136,73 @@ export const BOARD_CELLS = { width: 140, row: 12, title: 11 } as const;
 /** How many cells high a leaderboard of `rows` lines is. */
 export function boardHeightCells(rows: number): number {
   return BOARD_CELLS.title + BOARD_CELLS.row * rows;
+}
+
+/** On a laptop the race keeps this many CSS pixels free along the right edge, for the heads of the players watching. */
+export const PEEK_COLUMN = 112;
+
+/** Where the race screen puts things, in CSS pixels: the track as in solo, the tower, the lobby code and the countdown. */
+export interface RaceLayout extends SoloLayout {
+  /** The tower's top left corner, and its cell: a whole number of device pixels. */
+  board: { x: number; y: number; cell: number };
+  /** The lobby code's line, in the bottom left corner of a laptop; a phone has no room for it. */
+  code: { x: number; y: number } | null;
+  /** The top of the countdown's number, which is centred across the screen, and its cell. */
+  count: { y: number; cell: number };
+}
+
+// The tower holds a line for each player a lobby can have.
+const BOARD_ROWS = 8;
+// On a laptop: the gaps above the tower and between it and the track, and the lobby code's line with its gap above.
+const EDGE = 16;
+const CODE_LINE = 46;
+const CODE_CELL = 1.5;
+
+/** The largest cell up to `cell` that is a whole number of device pixels, and at least one of them. */
+const deviceCell = (cell: number, dpr: number): number => Math.max(1, Math.floor(cell * dpr + 1e-9)) / dpr;
+
+/** Where a countdown number of `cell` goes to have its middle at `mid`. */
+const countAt = (mid: number, cell: number): RaceLayout['count'] => ({ y: mid - (FONT_ROWS * cell) / 2, cell });
+
+/**
+ * The race screen. A phone has the solo track and touch areas, with a tower that fits in the top left corner. A laptop
+ * has the tower in the top left corner and the track right under it, as wide as leaves the right column free; on a
+ * short window the tower shrinks first, and the track only once the tower is at one CSS pixel a cell.
+ */
+export function raceLayout(vw: number, vh: number, coarse: boolean, dpr: number): RaceLayout {
+  const towerCells = boardHeightCells(BOARD_ROWS);
+  if (vh > vw || coarse) {
+    const solo = soloLayout(vw, vh, coarse);
+    const { canvas } = solo;
+    const portrait = solo.hud !== null;
+    // Upright, above the HUD strip, with the number between the track and the touch areas; on its side, above the
+    // track, with the number in its middle.
+    const room = portrait ? solo.hud!.y - 16 : canvas.y - 12;
+    const count = portrait
+      ? countAt((canvas.y + canvas.h + (solo.zones?.left.y ?? vh)) / 2, 10)
+      : countAt(canvas.y + canvas.h / 2, 8);
+    return { ...solo, board: { x: 8, y: 8, cell: deviceCell(Math.min(1.5, room / towerCells), dpr) }, code: null, count };
+  }
+  const fixed = 2 * EDGE + CODE_LINE;
+  let scale = Math.max(0, vw - PEEK_COLUMN) / WORLD_W;
+  let cell = Math.min(2, (vh - (WORLD_H + SKY) * scale - fixed) / towerCells);
+  if (cell < 1) {
+    cell = 1;
+    scale = Math.min(scale, Math.max(0, vh - fixed - towerCells) / (WORLD_H + SKY));
+  }
+  cell = deviceCell(cell, dpr);
+  const top = EDGE + towerCells * cell + EDGE;
+  const canvas = { x: 0, y: top, w: WORLD_W * scale, h: (WORLD_H + SKY) * scale };
+  return {
+    mode: 'wide',
+    canvas,
+    scale,
+    hud: null,
+    hudScale: scale * HUD_STRIP.scale,
+    below: canvas.y + canvas.h + 16,
+    zones: null,
+    board: { x: EDGE, y: EDGE, cell },
+    code: { x: EDGE, y: vh - EDGE - FONT_ROWS * CODE_CELL },
+    count: countAt(canvas.y + canvas.h / 2, 14),
+  };
 }

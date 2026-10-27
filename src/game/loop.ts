@@ -79,3 +79,40 @@ export class FixedStepLoop {
     if (this.running) this.frameId = this.raf(this.frame);
   };
 }
+
+/**
+ * Calls onFrame once a display frame, for a race: its steps come from the shared clock, so the frame only says when to
+ * look at it.
+ */
+export class FrameLoop {
+  private readonly onFrame: () => void;
+  private readonly raf: (cb: FrameRequestCallback) => number;
+  private readonly caf: (id: number) => void;
+  private frameId: number | null = null;
+
+  constructor(onFrame: () => void, o: Pick<LoopOptions, 'raf' | 'caf'> = {}) {
+    this.onFrame = onFrame;
+    this.raf = o.raf ?? ((cb) => requestAnimationFrame(cb));
+    this.caf = o.caf ?? ((id) => cancelAnimationFrame(id));
+  }
+
+  get running(): boolean {
+    return this.frameId !== null;
+  }
+
+  start(): void {
+    if (this.running) return;
+    this.frameId = this.raf(this.frame);
+  }
+
+  stop(): void {
+    if (this.frameId === null) return;
+    this.caf(this.frameId);
+    this.frameId = null;
+  }
+
+  private readonly frame = (): void => {
+    this.onFrame();
+    if (this.running) this.frameId = this.raf(this.frame);
+  };
+}

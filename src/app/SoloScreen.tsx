@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type { CSSProperties } from 'react';
-import { DIM, SOFT } from '../game/colors';
+import { SOFT } from '../game/colors';
 import { soloLayout } from '../game/layout';
 import type { Rect } from '../game/layout';
 import { SoloGame } from '../game/solo';
@@ -12,6 +12,7 @@ import { FONT_CELL, FONT_ROWS } from '../ui/font';
 import { MuteButton } from './MuteButton';
 import { PixelButton } from '../ui/PixelButton';
 import { PixelText, useDevicePixelRatio } from '../ui/PixelText';
+import { TouchHints } from './TouchHints';
 
 export interface SoloScreenProps {
   sprites: SpriteSet;
@@ -21,9 +22,6 @@ export interface SoloScreenProps {
 }
 
 const FIRST_VIEW: SoloView = { phase: 'waiting', inverted: false, hints: false, deadMs: 0 };
-// The touch areas' dashed boxes sit this far in from the screen's edges, and half the gap from the middle.
-const HINT_EDGE = 8;
-const HINT_GAP = 8;
 
 const viewport = () => ({ w: window.innerWidth, h: window.innerHeight });
 
@@ -93,41 +91,7 @@ export function SoloScreen({ sprites, sound, testMode, onMenu }: SoloScreenProps
         </div>
       )}
       <MuteButton sound={sound} />
-      {view.hints && layout.zones && (
-        <div data-testid="touch-hints" className="touch-hints">
-          <TouchHint zone={layout.zones.left} side="left" portrait={layout.mode === 'portrait'} text={['HOLD', 'TO DUCK']} />
-          <TouchHint zone={layout.zones.right} side="right" portrait={layout.mode === 'portrait'} text={['TAP', 'TO JUMP']} />
-        </div>
-      )}
-    </div>
-  );
-}
-
-interface TouchHintProps {
-  zone: Rect;
-  side: 'left' | 'right';
-  portrait: boolean;
-  /** The label in two parts: two lines in portrait, one line on a phone on its side. */
-  text: [string, string];
-}
-
-// One touch area: a dashed box with its label in the middle (portrait) or at the top.
-function TouchHint({ zone, side, portrait, text }: TouchHintProps) {
-  const left = zone.x + (side === 'left' ? HINT_EDGE : HINT_GAP / 2);
-  const w = zone.w - HINT_EDGE - HINT_GAP / 2;
-  const h = zone.h - HINT_EDGE;
-  const lines = portrait ? text : [text.join(' ')];
-  return (
-    <div className="touch-hint" style={{ left, top: zone.y, width: w, height: h }}>
-      <svg width={w} height={h} aria-hidden="true">
-        <rect
-          x={0.5} y={0.5} width={w - 1} height={h - 1}
-          fill="none" stroke={DIM} strokeWidth={1} strokeDasharray="3 3" shapeRendering="crispEdges"
-        />
-      </svg>
-      <div className="touch-hint-label" style={portrait ? { top: '50%', transform: 'translateY(-50%)' } : { top: 10 }}>
-        {lines.map((t) => <PixelText key={t} text={t} size={1.5} color={DIM} />)}
-      </div>
+      {view.hints && layout.zones && <TouchHints zones={layout.zones} portrait={layout.mode === 'portrait'} />}
     </div>
   );
 }

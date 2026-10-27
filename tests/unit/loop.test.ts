@@ -1,5 +1,5 @@
 import { expect, it } from 'vitest';
-import { FixedStepLoop, stepsFor } from '../../src/game/loop';
+import { FixedStepLoop, FrameLoop, stepsFor } from '../../src/game/loop';
 
 it('runs one step per 1000/60 ms and keeps the remainder', () => {
   expect(stepsFor(0, 1000 / 60).steps).toBe(1);
@@ -105,5 +105,59 @@ it('stop() from inside a step ends the frame: no more steps, no more frames', ()
   cb?.(t);
   expect(steps).toBe(1);
   expect(pending).toBeNull();
+  expect(loop.running).toBe(false);
+});
+
+// A FrameLoop on a fake display: frame() runs the frame the loop asked for, if it asked for one.
+function fakeFrames(onFrame: () => void) {
+  let pending: FrameRequestCallback | null = null;
+  const loop = new FrameLoop(onFrame, {
+    raf: (cb) => {
+      pending = cb;
+      return 1;
+    },
+    caf: () => {
+      pending = null;
+    },
+  });
+  const frame = () => {
+    const cb = pending;
+    pending = null;
+    cb?.(0);
+  };
+  return { loop, frame, asked: () => pending !== null };
+}
+
+it('calls onFrame once a frame until stopped', () => {
+  let frames = 0;
+  const { loop, frame, asked } = fakeFrames(() => frames++);
+  expect(loop.running).toBe(false);
+  loop.start();
+  loop.start(); // once is enough
+  expect(loop.running).toBe(true);
+  frame();
+  frame();
+  frame();
+  expect(frames).toBe(3);
+  loop.stop();
+  expect(loop.running).toBe(false);
+  expect(asked()).toBe(false);
+  frame();
+  expect(frames).toBe(3);
+  loop.start();
+  frame();
+  expect(frames).toBe(4);
+});
+
+it('a FrameLoop stopped from inside onFrame asks for no more frames', () => {
+  let frames = 0;
+  const { loop, frame, asked } = fakeFrames(() => {
+    frames += 1;
+    loop.stop();
+  });
+  loop.start();
+  frame();
+  expect(frames).toBe(1);
+  expect(asked()).toBe(false);
   expect(loop.running).toBe(false);
 });

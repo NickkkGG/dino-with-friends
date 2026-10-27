@@ -11,6 +11,7 @@ import type { SessionError, SessionView } from '../net/session';
 import { LobbyScreen } from './LobbyScreen';
 import { MultiplayerScreen } from './MultiplayerScreen';
 import { NameScreen } from './NameScreen';
+import { RaceScreen } from './RaceScreen';
 
 /** Where the player's name is kept on the device. */
 export const NAME_KEY = 'dwf.name';
@@ -20,7 +21,7 @@ export interface MultiplayerFlowProps {
   sound: Sound;
   testMode: TestMode;
   onExit(): void;
-  /** Told which screen is on show: name, multiplayer or lobby. */
+  /** Told which screen is on show: name, multiplayer, lobby or race. */
   onScreen(screen: string): void;
 }
 
@@ -35,10 +36,10 @@ function useSessionView(session: LobbySession | null): SessionView | null {
 
 /**
  * Everything after MULTIPLAYER on the title: YOUR NAME the first time, then MULTIPLAYER, where a lobby is made or
- * joined, and the lobby once the server has said welcome. A lobby that fails takes the player back to MULTIPLAYER with
- * what went wrong.
+ * joined, the lobby once the server has said welcome, and the race from the countdown to the end of the round. A lobby
+ * that fails takes the player back to MULTIPLAYER with what went wrong.
  */
-export function MultiplayerFlow({ sprites, sound, onExit, onScreen }: MultiplayerFlowProps) {
+export function MultiplayerFlow({ sprites, sound, testMode, onExit, onScreen }: MultiplayerFlowProps) {
   const [name, setName] = useState(() => cleanName(readText(NAME_KEY, '')));
   const [naming, setNaming] = useState(() => name === '');
   const [session, setSession] = useState<LobbySession | null>(null);
@@ -111,9 +112,11 @@ export function MultiplayerFlow({ sprites, sound, onExit, onScreen }: Multiplaye
   }, [session]);
 
   const inLobby = session !== null && view?.status === 'joined';
-  const screen = inLobby ? 'lobby' : naming ? 'name' : 'multiplayer';
+  const racing = inLobby && (view.phase === 'countdown' || view.phase === 'playing');
+  const screen = racing ? 'race' : inLobby ? 'lobby' : naming ? 'name' : 'multiplayer';
   useEffect(() => onScreen(screen), [screen, onScreen]);
 
+  if (racing) return <RaceScreen sprites={sprites} sound={sound} testMode={testMode} view={view} session={session} />;
   if (inLobby) {
     const leave = () => {
       session.leave();

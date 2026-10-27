@@ -1,6 +1,8 @@
 import { expect, it } from 'vitest';
-import { HUD_STRIP, SKY, boardHeightCells, menuSizes, soloLayout, titleLayout } from '../../src/game/layout';
-import type { TitleLayout } from '../../src/game/layout';
+import {
+  HUD_STRIP, PEEK_COLUMN, SKY, boardHeightCells, menuSizes, raceLayout, soloLayout, titleLayout,
+} from '../../src/game/layout';
+import type { RaceLayout, TitleLayout } from '../../src/game/layout';
 
 it('laptop 1440×900: wide, full width, world centred', () => {
   const l = soloLayout(1440, 900, false);
@@ -96,4 +98,77 @@ it('sizes the menu text for a phone and a laptop', () => {
 it('measures the tower in cells: a title, then 12 a line', () => {
   expect(boardHeightCells(8)).toBe(107);
   expect(boardHeightCells(2)).toBe(35);
+});
+
+// The bottom of a tower of `rows` lines.
+const fits = (l: RaceLayout, rows = 8) => l.board.y + boardHeightCells(rows) * l.board.cell;
+// The middle of the countdown's number, which is 7 cells high.
+const countMiddle = (l: RaceLayout) => l.count.y + (7 * l.count.cell) / 2;
+
+it('puts the tower above the track on a laptop, with the right column kept free', () => {
+  const l = raceLayout(1440, 900, false, 2);
+  expect(l.board).toEqual({ x: 16, y: 16, cell: 2 });
+  expect(l.mode).toBe('wide');
+  expect(l.canvas.x).toBe(0);
+  expect(l.canvas.w).toBe(1440 - PEEK_COLUMN);
+  expect(l.canvas.h).toBeCloseTo(((1440 - PEEK_COLUMN) / 600) * 190);
+  expect(fits(l)).toBeLessThanOrEqual(l.canvas.y);
+  expect(l.canvas.y).toBeCloseTo(fits(l) + 16);
+  expect(l.code).toEqual({ x: 16, y: 900 - 16 - 7 * 1.5 });
+  expect(l.code!.y + 7 * 1.5).toBeLessThanOrEqual(900);
+  expect(l.count.cell).toBe(14);
+  expect(countMiddle(l)).toBeCloseTo(l.canvas.y + l.canvas.h / 2);
+  expect([l.hud, l.zones]).toEqual([null, null]);
+});
+
+it('shrinks the tower before the track on a short laptop window', () => {
+  const l = raceLayout(1440, 680, false, 2);
+  expect(l.board.cell).toBe(1.5);
+  expect(l.canvas.w).toBe(1440 - PEEK_COLUMN);
+  expect(l.canvas.y + l.canvas.h + 46).toBeLessThanOrEqual(680);
+});
+
+it('shrinks the track only once the tower is at its smallest', () => {
+  const l = raceLayout(1440, 600, false, 2);
+  expect(l.board.cell).toBe(1);
+  expect(l.canvas.w).toBeLessThan(1440 - PEEK_COLUMN);
+  expect(l.canvas.h / l.canvas.w).toBeCloseTo(190 / 600);
+  expect(fits(l)).toBeLessThanOrEqual(l.canvas.y);
+  expect(l.canvas.y + l.canvas.h + 46 - 600).toBeLessThan(1e-6);
+});
+
+it('fits eight rows above the HUD strip on an upright phone', () => {
+  const l = raceLayout(390, 844, true, 3);
+  // At most 1.5 CSS px a cell, which at 3 device px a CSS px is 4.5 of them: down to 4.
+  expect(l.board).toEqual({ x: 8, y: 8, cell: 4 / 3 });
+  expect(raceLayout(390, 844, true, 2).board.cell).toBe(1.5);
+  expect(fits(l)).toBeLessThanOrEqual(l.hud!.y);
+  expect(l.code).toBeNull();
+  const solo = soloLayout(390, 844, true);
+  expect([l.mode, l.canvas, l.hud, l.zones]).toEqual([solo.mode, solo.canvas, solo.hud, solo.zones]);
+  // The number is halfway between the track and the touch areas.
+  expect(l.count.cell).toBe(10);
+  expect(countMiddle(l)).toBeCloseTo((l.canvas.y + l.canvas.h + l.zones!.left.y) / 2);
+});
+
+it('fits eight rows above the track on a phone on its side', () => {
+  const l = raceLayout(844, 390, true, 3);
+  expect(l.board).toEqual({ x: 8, y: 8, cell: 1 });
+  expect(fits(l)).toBeLessThanOrEqual(l.canvas.y);
+  expect(l.canvas.y + l.canvas.h).toBeCloseTo(390, 5);
+  const solo = soloLayout(844, 390, true);
+  expect([l.mode, l.canvas, l.hud, l.zones]).toEqual([solo.mode, solo.canvas, solo.hud, solo.zones]);
+  expect(l.code).toBeNull();
+  expect(l.count.cell).toBe(8);
+  expect(countMiddle(l)).toBeCloseTo(l.canvas.y + l.canvas.h / 2);
+});
+
+it('keeps a tower cell on whole device pixels', () => {
+  for (const dpr of [1, 1.25, 1.5, 2, 2.625, 3]) {
+    for (const [vw, vh, coarse] of [[1440, 680, false], [390, 844, true], [844, 390, true]] as const) {
+      const px = raceLayout(vw, vh, coarse, dpr).board.cell * dpr;
+      expect(px).toBeCloseTo(Math.round(px), 9);
+      expect(px).toBeGreaterThanOrEqual(1);
+    }
+  }
 });

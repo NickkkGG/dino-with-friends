@@ -3,10 +3,11 @@ import { skillRemaining } from '../../shared/sim/world';
 import type { LobbyPhase } from '../../shared/lobby/protocol';
 import type { Phase, World } from '../../shared/sim/world';
 import type { SessionView } from '../net/session';
+import type { RaceView } from './race-run';
 
 // window.__dwf: what the end-to-end tests read from the page in the dev build. Nothing here runs in production.
 
-/** What the game on the screen shows the tests: the solo round now, the title's demo later. */
+/** What the game on the screen shows the tests: the solo round, the title's demo or a race. */
 export interface GameDebug {
   phase: Phase | null;
   step: number;
@@ -17,6 +18,8 @@ export interface GameDebug {
   /** The steps left of each timed skill. */
   skills: { doubleJump: number; ghost: number; speed: number } | null;
   canvas: { width: number; height: number; cssWidth: number; k: number; sprite: 1 | 2 } | null;
+  /** A race on the screen: its phase and countdown, when it starts and the server's clock now. */
+  race?: { phase: RaceView['phase']; count: RaceView['count']; startAt: number; serverNow: number };
 }
 
 /** The lobby this page is in, as the tests see it. */
