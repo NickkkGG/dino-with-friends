@@ -44,6 +44,6 @@ The end-to-end tests run in Playwright's Chromium and WebKit, which you install 
 
 ## Credits and licenses
 
-This game is based on the offline dino game from Chromium. The original code, sprites, and sounds are © The Chromium Authors and are used under a BSD-style license (see [`third_party/chromium/LICENSE`](third_party/chromium/LICENSE)). They are kept unchanged in [`third_party/chromium/`](third_party/chromium/), and [`third_party/chromium/README.md`](third_party/chromium/README.md) says where they come from. Files ported from them (in `shared/sim/`, `src/game/draw/`, and `src/game/sprite-defs.ts`) keep the Chromium copyright notice at the top and say what was changed. The game's CREDITS screen shows the full license text too.
+This game is based on the offline dino game from Chromium. The original code, sprites, and sounds are © The Chromium Authors and are used under a BSD-style license (see [`third_party/chromium/LICENSE`](third_party/chromium/LICENSE)). They are kept unchanged in [`third_party/chromium/`](third_party/chromium/), and [`third_party/chromium/README.md`](third_party/chromium/README.md) says where they come from. Files ported from them (in `shared/sim/`, `src/game/draw/`, and `src/game/sprite-defs.ts`) keep the Chromium copyright notice at the top and say what was changed. The tab and home screen icons in `public/` are made from the dino's head in the same sprite sheet. The game's CREDITS screen shows the full license text too.
 
 Everything else is © 2026 NickkkGG and released under the MIT license (see [`LICENSE`](LICENSE)).
