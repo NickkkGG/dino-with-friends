@@ -361,6 +361,12 @@ body {
   line-height: 0;
 }
 
+/* A part that comes and goes, such as the head of a player whose connection is down, keeps its place while hidden. */
+.blinking {
+  display: block;
+  line-height: 0;
+}
+
 /* The leaderboard: every part of a line placed in cells, and a line that changes place slides there. */
 .leaderboard {
   position: relative;

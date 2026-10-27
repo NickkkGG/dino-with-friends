@@ -126,6 +126,9 @@ test('a full race: results, the winner, and back to the lobby for round 2', asyn
   await page.getByTestId('btn-start').click();
   await expect(page.getByTestId('race-board')).toContainText('ROUND 2');
   await expect(friend!.getByTestId('race-board')).toContainText('ROUND 2');
+  // NICK lost round 1, and runs in round 2 all the same.
+  await expect(page.getByTestId('race-canvas')).toHaveAttribute('data-mode', 'run');
+  await until(page, 'window.__dwf?.race?.phase === "running"');
   await friend!.context().close();
 });
 

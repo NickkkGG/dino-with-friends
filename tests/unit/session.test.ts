@@ -348,6 +348,19 @@ it('keeps its countdown for the round it is in when the lobby sends it again', (
   expect(s.session.view().countdown).toEqual({ round: 2, seed: 7, startAt: 9000 });
 });
 
+it("forgets the last round's tower when the next round's countdown comes, and keeps it for the same round", () => {
+  const s = joined();
+  const countdown: Extract<ServerMessage, { type: 'countdown' }> = {
+    type: 'countdown', round: 1, seed: 7, startAt: 5000, runners: [{ id: 'p1', name: 'NICK' }],
+  };
+  s.fake.last.serverSays(countdown);
+  s.fake.last.serverSays({ type: 'tower', rows: [{ id: 'p1', score: 40, hp: 0, alive: false }] });
+  s.fake.last.serverSays(countdown); // the same round, sent again after a drop
+  expect(s.session.view().tower).toHaveLength(1);
+  s.fake.last.serverSays({ ...countdown, round: 2, startAt: 9000 });
+  expect(s.session.view().tower).toEqual([]);
+});
+
 it('says watch again after coming back, and every 5 s', () => {
   const s = joined({ phase: 'playing' });
   s.session.watch('p2');

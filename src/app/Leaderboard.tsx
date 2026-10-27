@@ -4,6 +4,7 @@ import { BOARD_CELLS, boardHeightCells } from '../game/layout';
 import { measureCells } from '../ui/font';
 import { PixelIcon } from '../ui/PixelIcon';
 import { PixelText } from '../ui/PixelText';
+import { Blinking } from './Blinking';
 
 /** One line of a leaderboard. */
 export interface BoardRow {
@@ -30,6 +31,8 @@ export interface LeaderboardProps {
   framed?: string | null;
   /** Called with the id of a running runner's line that is tapped or clicked; those lines can be picked. */
   onPick?: (id: string) => void;
+  /** Players whose connection is down: their heads come and go. */
+  away?: ReadonlySet<string>;
 }
 
 // Where a line's parts are, in cells from its left end: the place, the head, the name, and the score's right edge.
@@ -43,10 +46,11 @@ const fiveDigits = (score: number): string => String(Math.min(99_999, Math.max(0
 /**
  * A leaderboard: its title, then a line for each player with the place, a head, the name and the score. A line is placed
  * by a transform that eases, so a player who moves up or down slides there. The line of the runner being watched is
- * framed, and with `onPick` the lines of the others still running can be picked.
+ * framed, and with `onPick` the lines of the others still running can be picked. The head of a player whose connection
+ * is down comes and goes.
  */
 export function Leaderboard({
-  title, rows, heads, cell, mode, testId, rowTestId = 'board-row', framed = null, onPick,
+  title, rows, heads, cell, mode, testId, rowTestId = 'board-row', framed = null, onPick, away,
 }: LeaderboardProps) {
   const at = (cells: number): string => `${cells * cell}px`;
   const width = (BOARD_CELLS.width + 2 * BOX_OUT) * cell;
@@ -63,6 +67,8 @@ export function Leaderboard({
         const part = (cells: number, top = 0) => ({ left: at(BOX_OUT + cells), top: at(top) });
         const box = { left: 0, top: at(-BOX_OUT), width, height: at(BOX_H) };
         const pickable = onPick !== undefined && row.alive && !row.me;
+        const gone = away?.has(row.id) ?? false;
+        const head = <PixelIcon rows={out ? heads.dead : heads.alive} size={cell} color={color} />;
         return (
           <div
             key={row.id}
@@ -71,6 +77,7 @@ export function Leaderboard({
             data-me={row.me}
             data-alive={row.alive}
             data-framed={row.id === framed}
+            data-away={gone}
             data-pickable={pickable}
             className={pickable ? 'board-row pickable' : 'board-row'}
             style={{
@@ -86,7 +93,7 @@ export function Leaderboard({
               <PixelText text={String(i + 1)} size={cell} color={color} />
             </span>
             <span className="board-part" style={part(COL.head, -1)}>
-              <PixelIcon rows={out ? heads.dead : heads.alive} size={cell} color={color} />
+              {gone ? <Blinking>{head}</Blinking> : head}
             </span>
             <span className="board-part" style={part(COL.name)}>
               <PixelText text={row.name} size={cell} color={color} />

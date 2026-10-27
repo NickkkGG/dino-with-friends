@@ -92,33 +92,6 @@ test("CAN'T CONNECT when the server cannot be reached, and TRY AGAIN works once 
   await expect(page.getByTestId('lobby-screen')).toBeVisible();
 });
 
-test('a dropped connection comes back by itself, in the same seat', async ({ page, browser }) => {
-  await named(page, 'NICK');
-  // The page's lobby sockets pass through here, so the first one can be cut as a dropped Wi-Fi would cut it.
-  const cuts: (() => Promise<void>)[] = [];
-  await page.routeWebSocket(/\/ws\/[A-Z2-9]{6}$/, (ws) => {
-    const server = ws.connectToServer();
-    cuts.push(async () => {
-      await server.close();
-      await ws.close();
-    });
-  });
-  await page.goto('/');
-  const code = await createLobby(page);
-  const friend = await openPlayer(browser, { name: 'RARA' });
-  await joinLobby(friend, code);
-  await expect(page.getByTestId('players-count')).toHaveText('PLAYERS 2/8');
-  await cuts[0]!();
-  await expect
-    .poll(() => page.evaluate(() => window.__dwf!.lobby), { timeout: 5000 })
-    .toMatchObject({ status: 'joined', code, you: 'p1', host: true });
-  expect(cuts.length).toBeGreaterThan(1); // on a new socket
-  await expect(page.getByTestId('mp-error')).toHaveCount(0);
-  await expect(page.getByTestId('lobby-screen')).toBeVisible();
-  await expect(friend.getByTestId('players-count')).toHaveText('PLAYERS 2/8');
-  await friend.context().close();
-});
-
 test('< LEAVE goes back to MULTIPLAYER', async ({ page }) => {
   await named(page, 'NICK');
   await page.goto('/');

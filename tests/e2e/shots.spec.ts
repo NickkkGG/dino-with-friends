@@ -3,7 +3,7 @@ import { fileURLToPath } from 'node:url';
 import { expect, test } from '@playwright/test';
 import type { Page, TestInfo } from '@playwright/test';
 import { makeCode } from '../../shared/lobby/code';
-import { BOT, createLobby, joinLobby, named, openPlayer, startRace } from './players';
+import { BOT, createLobby, cutter, joinLobby, named, openPlayer, startRace } from './players';
 
 // Screenshots of every screen and two short videos, for checking the game by eye. They go to shots/, which git ignores.
 
@@ -18,6 +18,13 @@ async function shoot(page: Page, info: TestInfo, name: string): Promise<void> {
 // Waits in the page, frame by frame, until window.__dwf shows what `condition` asks for.
 const until = (page: Page, condition: string, timeout = 30_000) =>
   page.waitForFunction(`window.__dwf && (${condition})`, null, { timeout, polling: 'raf' });
+
+// Waits for the part that comes and goes inside `selector` to be showing, so the shot has it.
+const showing = (page: Page, selector: string) =>
+  page.waitForFunction((sel) => {
+    const el = document.querySelector(`${sel} .blinking`);
+    return el !== null && getComputedStyle(el).visibility === 'visible';
+  }, selector, { polling: 'raf' });
 
 // The first jump, from a touch on the right half, the same on every project.
 async function startRound(page: Page): Promise<void> {
@@ -198,6 +205,44 @@ for (const landscape of [false, true]) {
         await shoot(watched, info, 'mp-watched');
       }
       for (const f of friends) await f.context().close();
+    });
+
+    test('multiplayer: RECONNECTING... mid-race', async ({ page, browser }, info) => {
+      const net = await cutter(page);
+      const [friend] = await startRace(page, browser, [{ name: 'RARA', query: BOT }], '?autopilot=1');
+      await until(page, "window.__dwf.race && window.__dwf.race.phase === 'running' && window.__dwf.step > 240", 40_000);
+      net.block(true);
+      await net.cut();
+      await showing(page, '[data-testid="reconnecting"]');
+      await shoot(page, info, `mp-reconnecting${tag}`);
+      await friend!.context().close();
+    });
+
+    test('multiplayer: the lobby with a friend away', async ({ page, browser }, info) => {
+      await named(page, 'NICK');
+      await page.goto('/');
+      const code = await createLobby(page);
+      const friend = await openPlayer(browser, { name: 'RARA' });
+      const net = await cutter(friend);
+      await joinLobby(friend, code);
+      await expect(page.getByTestId('players-count')).toHaveText('PLAYERS 2/8');
+      net.block(true);
+      await net.cut();
+      const rara = '[data-testid="player-row"][data-player-id="p2"]';
+      await expect(page.locator(rara)).toHaveAttribute('data-connected', 'false');
+      await showing(page, rara);
+      await shoot(page, info, `mp-lobby-away${tag}`);
+      await friend.context().close();
+    });
+
+    test('multiplayer: NEW VERSION AVAILABLE', async ({ page }, info) => {
+      await named(page, 'NICK');
+      await page.goto('/?version=old');
+      await page.getByTestId('btn-multiplayer').click();
+      await page.getByTestId('btn-create').click();
+      await expect(page.getByTestId('mp-error')).toContainText('NEW VERSION AVAILABLE');
+      await page.waitForTimeout(300);
+      await shoot(page, info, `mp-new-version${tag}`);
     });
 
     test('multiplayer: the results', async ({ page, browser }, info) => {

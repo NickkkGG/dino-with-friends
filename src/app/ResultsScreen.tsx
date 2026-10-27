@@ -6,6 +6,7 @@ import type { Sound } from '../game/sound';
 import type { SpriteSet } from '../game/sprites';
 import { PixelButton } from '../ui/PixelButton';
 import { PixelText } from '../ui/PixelText';
+import { Reconnecting } from './Blinking';
 import { Leaderboard } from './Leaderboard';
 import type { BoardRow } from './Leaderboard';
 import { MenuScreen, useViewportWidth } from './MenuScreen';
@@ -16,6 +17,8 @@ export interface ResultsScreenProps {
   end: { round: number; results: readonly ResultRow[] };
   /** This player's id, whose line is lit. */
   you: string | null;
+  /** The connection is down, and the session tries to get its seat back. */
+  reconnecting: boolean;
   onBack(): void;
 }
 
@@ -24,9 +27,10 @@ const AUTO_BACK_S = 5;
 
 /**
  * The end of a round: who won, everyone's final place, and the way back to the lobby, which comes by itself after
- * AUTO_BACK_S seconds. Under it all the winner's dino hops.
+ * AUTO_BACK_S seconds. Under it all the winner's dino hops. While the connection is down, RECONNECTING... takes the
+ * place of the seconds left, which go on counting.
  */
-export function ResultsScreen({ sprites, sound, end, you, onBack }: ResultsScreenProps) {
+export function ResultsScreen({ sprites, sound, end, you, reconnecting, onBack }: ResultsScreenProps) {
   const vw = useViewportWidth();
   const sizes = menuSizes(vw);
   const [left, setLeft] = useState(AUTO_BACK_S);
@@ -59,9 +63,13 @@ export function ResultsScreen({ sprites, sound, end, you, onBack }: ResultsScree
       <div className="menu-button-wide" style={{ width: vw < 600 ? 230 : 260 }}>
         <PixelButton label="BACK TO LOBBY" variant="filled" onClick={onBack} testId="btn-back-to-lobby" />
       </div>
-      <span data-testid="auto-back">
-        <PixelText text={`AUTOMATIC IN ${Math.max(1, left)}`} size={sizes.small} color={SOFT} />
-      </span>
+      {reconnecting ? (
+        <Reconnecting size={sizes.small} color={SOFT} />
+      ) : (
+        <span data-testid="auto-back">
+          <PixelText text={`AUTOMATIC IN ${Math.max(1, left)}`} size={sizes.small} color={SOFT} />
+        </span>
+      )}
     </MenuScreen>
   );
 }

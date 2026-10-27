@@ -1,5 +1,5 @@
 import { expect } from '@playwright/test';
-import type { Browser, Page } from '@playwright/test';
+import type { Browser, Page, WebSocketRoute } from '@playwright/test';
 
 // Helpers for the tests where several players share a lobby, each in a browser window of their own.
 
@@ -75,4 +75,31 @@ export async function stopFrames(page: Page): Promise<void> {
   await page.evaluate(() => {
     window.requestAnimationFrame = () => 0;
   });
+}
+
+/**
+ * Lets the test cut this page's lobby sockets as a dropped Wi-Fi would, and turn new ones away while blocked.
+ * Set up before the page opens its lobby.
+ */
+export async function cutter(page: Page): Promise<{ cut(): Promise<void>; block(on: boolean): void }> {
+  let blocked = false;
+  const open: { page: WebSocketRoute; server: WebSocketRoute }[] = [];
+  await page.routeWebSocket(/\/ws\//, async (ws) => {
+    if (blocked) {
+      await ws.close();
+      return;
+    }
+    open.push({ page: ws, server: ws.connectToServer() });
+  });
+  return {
+    async cut() {
+      for (const s of open.splice(0)) {
+        await s.server.close().catch(() => {});
+        await s.page.close().catch(() => {});
+      }
+    },
+    block(on) {
+      blocked = on;
+    },
+  };
 }

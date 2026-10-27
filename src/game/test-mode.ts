@@ -1,6 +1,6 @@
 import type { SkillId } from '../../shared/sim/boxes';
 
-/** What the dev build's test URL can fix: ?seed=7&timeScale=4&box=ghost&invincible=1&autopilot=1. */
+/** What the dev build's test URL can fix: ?seed=7&timeScale=4&box=ghost&invincible=1&autopilot=1&version=old. */
 export interface TestMode {
   /** Every round on this seed; null for a random one each round. */
   seed: number | null;
@@ -11,10 +11,12 @@ export interface TestMode {
   invincible: boolean;
   /** The demo's bot plays, from the first jump on. */
   autopilot: boolean;
+  /** The build version the page says it is, in place of its own: 1 to 32 of a–z and 0–9. Dev only. */
+  version: string | null;
 }
 
 export const NO_TEST_MODE: Readonly<TestMode> = Object.freeze({
-  seed: null, timeScale: 1, box: null, invincible: false, autopilot: false,
+  seed: null, timeScale: 1, box: null, invincible: false, autopilot: false, version: null,
 });
 
 const SKILLS: readonly SkillId[] = ['doubleJump', 'heart', 'ghost', 'speed'];
@@ -34,11 +36,13 @@ export function parseTestMode(search: string, dev: boolean): TestMode {
   const seed = /^\d{1,10}$/.test(seedText) && Number(seedText) <= 0xffffffff ? Number(seedText) : null;
   const scale = Number(q.get('timeScale'));
   const box = SKILLS.find((id) => id === q.get('box')) ?? null;
+  const version = q.get('version') ?? '';
   return {
     seed,
     timeScale: Number.isFinite(scale) ? Math.min(MAX_TIME_SCALE, Math.max(1, scale)) : 1,
     box,
     invincible: flag(q, 'invincible'),
     autopilot: flag(q, 'autopilot'),
+    version: /^[a-z0-9]{1,32}$/.test(version) ? version : null,
   };
 }

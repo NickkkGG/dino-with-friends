@@ -270,10 +270,12 @@ export class LobbySession {
       case 'countdown': {
         const names = new Map(this.current.names);
         for (const r of msg.runners) names.set(r.id, r.name);
-        // The round already held keeps its object, so a race that comes back after a drop does not start again.
+        // The round already held keeps its object, so a race that comes back after a drop does not start again. A new
+        // round's tower comes after its countdown: the last round's is gone by then.
         const held = this.current.countdown;
         const same = held !== null && held.round === msg.round && held.seed === msg.seed && held.startAt === msg.startAt;
-        this.update({ countdown: same ? held : { round: msg.round, seed: msg.seed, startAt: msg.startAt }, names });
+        const countdown = same ? held : { round: msg.round, seed: msg.seed, startAt: msg.startAt };
+        this.update(held?.round === msg.round ? { countdown, names } : { countdown, names, tower: [] });
         this.pingBurst();
         break;
       }

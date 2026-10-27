@@ -7,6 +7,7 @@ import type { SpriteSet } from '../game/sprites';
 import type { SessionView } from '../net/session';
 import { PixelButton } from '../ui/PixelButton';
 import { PixelText } from '../ui/PixelText';
+import { Reconnecting } from './Blinking';
 import { copyText } from './copy';
 import { MenuScreen, useViewportWidth } from './MenuScreen';
 import { PlayerList } from './PlayerList';
@@ -24,7 +25,8 @@ const COPIED_MS = 1500;
 
 /**
  * LOBBY: the code to share, which a tap copies, who is in, and START for the host (WAITING FOR HOST... for everyone
- * else). START needs two players, and the lobby back from the last round's results.
+ * else). START needs two players, and the lobby back from the last round's results. While the connection is down,
+ * RECONNECTING... takes their place.
  */
 export function LobbyScreen({ sprites, sound, view, onLeave, onStart }: LobbyScreenProps) {
   const vw = useViewportWidth();
@@ -59,7 +61,9 @@ export function LobbyScreen({ sprites, sound, view, onLeave, onStart }: LobbyScr
         <PixelText text={`PLAYERS ${view.players.length}/${MAX_PLAYERS}`} size={sizes.small} color={SOFT} />
       </span>
       <PlayerList players={view.players} heads={sprites.heads} size={sizes.body} />
-      {host ? (
+      {view.status === 'reconnecting' ? (
+        <Reconnecting size={sizes.body} color={SOFT} />
+      ) : host ? (
         <>
           <div className="menu-button-wide" style={{ width: vw < 600 ? 230 : 260 }}>
             <PixelButton

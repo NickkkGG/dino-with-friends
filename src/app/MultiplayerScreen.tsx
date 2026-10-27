@@ -36,7 +36,10 @@ const ERROR_TEXT: Readonly<Record<SessionError, string>> = {
 // The letters in the code boxes, in CSS pixels per cell.
 const BOX_TEXT = 3;
 
-/** MULTIPLAYER: who is playing, CREATE LOBBY, or JOIN WITH CODE in six boxes, and what went wrong, if anything. */
+/**
+ * MULTIPLAYER: who is playing, CREATE LOBBY, or JOIN WITH CODE in six boxes, and what went wrong, if anything: with TRY
+ * AGAIN where trying again can help, and REFRESH when the lobby runs a newer build than this page.
+ */
 export function MultiplayerScreen(p: MultiplayerScreenProps) {
   const vw = useViewportWidth();
   const sizes = menuSizes(vw);
@@ -90,6 +93,9 @@ export function MultiplayerScreen(p: MultiplayerScreenProps) {
         <div data-testid="mp-error" className="mp-error">
           <PixelText text={ERROR_TEXT[p.error]} size={sizes.body} />
           {retry && <PixelButton label="TRY AGAIN" variant="outline" onClick={p.onRetry} testId="btn-retry" />}
+          {p.error === 'VERSION_MISMATCH' && (
+            <PixelButton label="REFRESH" variant="outline" onClick={() => window.location.reload()} testId="btn-refresh" />
+          )}
         </div>
       )}
     </MenuScreen>

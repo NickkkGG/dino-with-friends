@@ -3,9 +3,11 @@ import { NO_TEST_MODE, parseTestMode } from '../../src/game/test-mode';
 
 it('reads seed, timeScale (1..8), box, invincible and autopilot only in dev', () => {
   const all = '?seed=7&timeScale=4&box=ghost&invincible=1&autopilot=1';
-  expect(parseTestMode(all, true)).toEqual({ seed: 7, timeScale: 4, box: 'ghost', invincible: true, autopilot: true });
+  expect(parseTestMode(all, true)).toEqual({
+    seed: 7, timeScale: 4, box: 'ghost', invincible: true, autopilot: true, version: null,
+  });
   expect(parseTestMode(all, false)).toEqual(NO_TEST_MODE);
-  expect(NO_TEST_MODE).toEqual({ seed: null, timeScale: 1, box: null, invincible: false, autopilot: false });
+  expect(NO_TEST_MODE).toEqual({ seed: null, timeScale: 1, box: null, invincible: false, autopilot: false, version: null });
   expect(parseTestMode('', true)).toEqual(NO_TEST_MODE);
   expect(parseTestMode('?view=solo', true)).toEqual(NO_TEST_MODE);
 });
@@ -23,4 +25,10 @@ it('keeps every value in range, and ignores the ones it cannot read', () => {
   expect(t('?box=laser').box).toBeNull();
   expect(t('?invincible=0&autopilot=false')).toMatchObject({ invincible: false, autopilot: false });
   expect(t('?invincible&autopilot=true')).toMatchObject({ invincible: true, autopilot: true });
+});
+
+it('takes a build version to say, in the dev build only', () => {
+  expect(parseTestMode('?version=old', true).version).toBe('old');
+  expect(parseTestMode('?version=old', false).version).toBeNull();
+  for (const bad of ['?version=', '?version=Old', `?version=${'a'.repeat(33)}`]) expect(parseTestMode(bad, true).version).toBeNull();
 });

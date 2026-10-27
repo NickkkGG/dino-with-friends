@@ -1,9 +1,10 @@
 import { useEffect, useState } from 'react';
 import type { LobbyPlayer } from '../../shared/lobby/protocol';
-import { SOFT } from '../game/colors';
+import { DIM, INK, SOFT } from '../game/colors';
 import type { Heads } from '../game/heads';
 import { PixelIcon } from '../ui/PixelIcon';
 import { PixelText } from '../ui/PixelText';
+import { Blinking } from './Blinking';
 
 export interface PlayerListProps {
   players: readonly LobbyPlayer[];
@@ -36,22 +37,34 @@ export function useBlinking(): boolean {
   return shut;
 }
 
+// A player whose connection is down has a dim line, and a head that comes and goes.
 function PlayerLine({ player, heads, size }: { player: LobbyPlayer; heads: Heads; size: number }) {
   const shut = useBlinking();
+  const away = !player.connected;
+  const head = <PixelIcon rows={shut ? heads.blink : heads.alive} size={size * 0.75} color={away ? DIM : INK} />;
   return (
-    <div data-testid="player-row" data-player-id={player.id} data-host={player.host} className="player-row">
-      <PixelIcon rows={shut ? heads.blink : heads.alive} size={size * 0.75} />
-      <PixelText text={player.name} size={size} />
+    <div
+      data-testid="player-row"
+      data-player-id={player.id}
+      data-host={player.host}
+      data-connected={player.connected}
+      className="player-row"
+    >
+      {away ? <Blinking>{head}</Blinking> : head}
+      <PixelText text={player.name} size={size} color={away ? DIM : INK} />
       {player.host && (
         <span className="player-host">
-          <PixelText text="HOST" size={size * 0.75} color={SOFT} />
+          <PixelText text="HOST" size={size * 0.75} color={away ? DIM : SOFT} />
         </span>
       )}
     </div>
   );
 }
 
-/** Who is in the lobby, in the order they came in: a head, the name, and HOST on the host's line. */
+/**
+ * Who is in the lobby, in the order they came in: a head, the name, and HOST on the host's line. The line of a player
+ * whose connection is down is dim, and its head comes and goes.
+ */
 export function PlayerList({ players, heads, size }: PlayerListProps) {
   return (
     <div className="player-list">

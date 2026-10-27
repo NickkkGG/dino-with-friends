@@ -14,6 +14,7 @@ import { WatchGame } from '../game/watch';
 import type { LobbySession, SessionView } from '../net/session';
 import { FONT_ROWS } from '../ui/font';
 import { PixelText, useDevicePixelRatio } from '../ui/PixelText';
+import { Reconnecting } from './Blinking';
 import { IdleStrip } from './IdleStrip';
 import { Leaderboard } from './Leaderboard';
 import type { BoardRow } from './Leaderboard';
@@ -42,8 +43,9 @@ const viewport = () => ({ w: window.innerWidth, h: window.innerHeight });
  * dino on the track, with the countdown over it before the start, and 2 s after their GAME OVER watches the top runner
  * still running. Anyone else watches at once: the screen of the runner watched, with WATCHING NAME over it, switched
  * with ← and → or a tap on a name in the tower. Along the right edge peek the heads of those watching the screen on
- * show. With nobody to watch, a player who came in after the start waits for the next round. At night the whole screen
- * turns over, as in solo.
+ * show. With nobody to watch, a player who came in after the start waits for the next round. While the connection is
+ * down, RECONNECTING... takes the place of WATCHING NAME and the run goes on; in the tower, the heads of those whose
+ * connection is down come and go. At night the whole screen turns over, as in solo.
  */
 export function RaceScreen({ sprites, sound, testMode, view, session }: RaceScreenProps) {
   const surface = useRef<HTMLDivElement>(null);
@@ -63,15 +65,19 @@ export function RaceScreen({ sprites, sound, testMode, view, session }: RaceScre
   const runner = view.players.some((p) => p.id === you && p.playing);
   const own = view.tower.find((r) => r.id === you);
   const out = view.phase === 'playing' && own !== undefined && !own.alive;
-  // Whether this player runs their own dino, as a runner whose line still ran when the screen opened; and whether
-  // WATCH_AFTER_MS have gone by since its GAME OVER.
-  const [runs] = useState(() => runner && own?.alive !== false);
+  // Whether this player runs their own dino: every runner does from the countdown on, and one who comes back during the
+  // round does if their line still runs, which waits for the tower. Then whether WATCH_AFTER_MS have gone by since its
+  // GAME OVER.
+  const [runs, setRuns] = useState<boolean | null>(null);
+  const known = view.phase === 'countdown' || !runner ? runner : own === undefined ? null : own.alive;
+  if (runs === null && known !== null) setRuns(known);
   const [over, setOver] = useState(false);
   const { target, pick, step } = useWatchTarget({
-    rows: view.tower, you, ready: round !== null && (!runs || over), watch: (t) => session.watch(t),
+    rows: view.tower, you, ready: round !== null && runs !== null && (!runs || over), watch: (t) => session.watch(t),
   });
   // A runner stays on their GAME OVER while there is nobody to watch.
-  const mode = round === null ? 'idle' : runs && (!over || target === null) ? 'run' : target !== null ? 'watch' : 'idle';
+  const mode =
+    round === null || runs === null ? 'idle' : runs && (!over || target === null) ? 'run' : target !== null ? 'watch' : 'idle';
   const running = mode === 'run';
   const watching = mode === 'watch' ? target : null;
 
@@ -162,6 +168,8 @@ export function RaceScreen({ sprites, sound, testMode, view, session }: RaceScre
   const rows: BoardRow[] = view.tower.map((r) => ({
     id: r.id, name: view.names.get(r.id) ?? '', score: r.score, alive: r.alive, me: r.id === you,
   }));
+  const away = new Set(view.players.flatMap((p) => (p.connected ? [] : [p.id])));
+  const reconnecting = view.status === 'reconnecting';
   const inverted = running ? race.inverted : watching !== null && night;
   // Whose screen is on show, for the heads of those watching it.
   const shown = running ? you : watching;
@@ -171,16 +179,18 @@ export function RaceScreen({ sprites, sound, testMode, view, session }: RaceScre
       <div className="race-board" style={{ left: layout.board.x, top: layout.board.y }}>
         <Leaderboard
           title={`ROUND ${view.round}`} rows={rows} heads={sprites.heads} cell={layout.board.cell} mode="race"
-          testId="race-board" framed={watching} onPick={watching !== null ? pick : undefined}
+          testId="race-board" framed={watching} onPick={watching !== null ? pick : undefined} away={away}
         />
       </div>
       {mode === 'idle' ? (
         <>
-          <div className="race-next">
-            <span data-testid="next-round">
-              <PixelText text="YOU PLAY NEXT ROUND" size={sizes.body} color={SOFT} />
-            </span>
-          </div>
+          {!runner && (
+            <div className="race-next">
+              <span data-testid="next-round">
+                <PixelText text="YOU PLAY NEXT ROUND" size={sizes.body} color={SOFT} />
+              </span>
+            </div>
+          )}
           <div className="race-strip">
             <IdleStrip sprites={sprites} />
           </div>
@@ -207,23 +217,11 @@ export function RaceScreen({ sprites, sound, testMode, view, session }: RaceScre
             </div>
           )}
           {watching !== null && (
-            <>
-              <div className="race-watch" style={overTrack(layout.label.y)}>
-                <span data-testid="watch-label">
-                  <PixelText text={`WATCHING ${view.names.get(watching) ?? ''}`} size={layout.label.cell} />
-                </span>
-                {!runner && (
-                  <span data-testid="next-round">
-                    <PixelText text="YOU PLAY NEXT ROUND" size={NEXT_CELL} color={SOFT} />
-                  </span>
-                )}
-              </div>
-              <div className="race-watch" style={overTrack(layout.hint.y)}>
-                <span data-testid="switch-hint">
-                  <PixelText text={coarse ? 'TAP A NAME TO SWITCH' : '← → TO SWITCH'} size={layout.hint.cell} color={SOFT} />
-                </span>
-              </div>
-            </>
+            <div className="race-watch" style={overTrack(layout.hint.y)}>
+              <span data-testid="switch-hint">
+                <PixelText text={coarse ? 'TAP A NAME TO SWITCH' : '← → TO SWITCH'} size={layout.hint.cell} color={SOFT} />
+              </span>
+            </div>
           )}
           {shown !== null && (
             <PeekRow
@@ -232,6 +230,21 @@ export function RaceScreen({ sprites, sound, testMode, view, session }: RaceScre
             />
           )}
         </>
+      )}
+      {(reconnecting || watching !== null) && (
+        <div className="race-watch" style={overTrack(layout.label.y)}>
+          {reconnecting && <Reconnecting size={layout.label.cell} />}
+          {!reconnecting && watching !== null && (
+            <span data-testid="watch-label">
+              <PixelText text={`WATCHING ${view.names.get(watching) ?? ''}`} size={layout.label.cell} />
+            </span>
+          )}
+          {watching !== null && !runner && (
+            <span data-testid="next-round">
+              <PixelText text="YOU PLAY NEXT ROUND" size={NEXT_CELL} color={SOFT} />
+            </span>
+          )}
+        </div>
       )}
       {layout.code && (
         <span data-testid="lobby-line" className="race-code" style={{ left: layout.code.x, top: snap(layout.code.y) }}>

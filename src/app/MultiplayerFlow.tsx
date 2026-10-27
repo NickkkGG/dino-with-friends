@@ -67,7 +67,7 @@ export function MultiplayerFlow({ sprites, sound, testMode, onExit, onScreen }: 
   }, []);
 
   const open = (code: string) => {
-    const s = new LobbySession({ code, name });
+    const s = new LobbySession({ code, name, version: testMode.version ?? undefined });
     current.current = s;
     last.current = { kind: 'join', code }; // TRY AGAIN comes back in here, also for the one who made the lobby
     setSession(s);
@@ -130,7 +130,12 @@ export function MultiplayerFlow({ sprites, sound, testMode, onExit, onScreen }: 
   if (inLobby) {
     if (results) {
       const back = () => setClosed(results.round);
-      return <ResultsScreen sprites={sprites} sound={sound} end={results} you={view.you} onBack={back} />;
+      return (
+        <ResultsScreen
+          sprites={sprites} sound={sound} end={results} you={view.you} reconnecting={view.status === 'reconnecting'}
+          onBack={back}
+        />
+      );
     }
     if (racing) {
       // A screen of its own for each round, which decides when it opens whether this player runs or watches.
