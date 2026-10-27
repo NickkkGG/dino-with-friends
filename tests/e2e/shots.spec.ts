@@ -3,7 +3,7 @@ import { fileURLToPath } from 'node:url';
 import { expect, test } from '@playwright/test';
 import type { Page, TestInfo } from '@playwright/test';
 import { makeCode } from '../../shared/lobby/code';
-import { BOT, createLobby, cutter, joinLobby, named, openPlayer, startRace } from './players';
+import { BOT, createLobby, cutter, joinLobby, named, openPlayer, rowOf, startRace } from './players';
 
 // Screenshots of every screen and two short videos, for checking the game by eye. They go to shots/, which git ignores.
 
@@ -289,4 +289,60 @@ test('20 s of a race of two, on video', async ({ browser }, info) => {
   await friend!.context().close();
   mkdirSync(SHOTS, { recursive: true });
   copyFileSync(await video.path(), `${SHOTS}${info.project.name}-race.webm`);
+});
+
+test('20 s of watching, on video', async ({ browser }, info) => {
+  test.skip(!['chromium-desktop', 'webkit-phone'].includes(info.project.name), 'one laptop and one phone');
+  test.setTimeout(150_000);
+  const { viewport } = info.project.use;
+  const dir = info.outputPath('video');
+  const context = await browser.newContext({ ...info.project.use, recordVideo: { dir, size: viewport ?? undefined } });
+  const page = await context.newPage();
+  // NICK plays nothing and is soon out; the two bots run on, and NICK switches between them once.
+  const friends = await startRace(page, browser, [{ name: 'RARA', query: BOT }, { name: 'TOTO', query: BOT }]);
+  await until(page, 'window.__dwf.watch !== undefined', 100_000);
+  await page.waitForTimeout(10_000);
+  if (isPhone(info.project.name)) {
+    const target = await page.evaluate(() => window.__dwf!.watch!.target);
+    await rowOf(page, target === 'p2' ? 'p3' : 'p2').click();
+  } else {
+    await page.keyboard.press('ArrowRight');
+  }
+  await page.waitForTimeout(10_000);
+  const video = page.video()!;
+  await context.close();
+  for (const f of friends) await f.context().close();
+  mkdirSync(SHOTS, { recursive: true });
+  copyFileSync(await video.path(), `${SHOTS}${info.project.name}-watch.webm`);
+});
+
+test('20 s of a watched screen, on video', async ({ page, browser }, info) => {
+  test.skip(info.project.name !== 'chromium-desktop', 'one laptop');
+  test.setTimeout(150_000);
+  await named(page, 'NICK');
+  await page.goto('/');
+  const code = await createLobby(page);
+  // RARA's window, 1280 × 800 like the other friends', is the one on video, while NICK watches RARA and TOTO in turn.
+  const size = { width: 1280, height: 800 };
+  const context = await browser.newContext({ viewport: size, recordVideo: { dir: info.outputPath('video'), size } });
+  const rara = await context.newPage();
+  await named(rara, 'RARA');
+  await rara.goto(`/${BOT}`);
+  await expect(rara.getByTestId('title-screen')).toBeVisible();
+  await joinLobby(rara, code);
+  const toto = await openPlayer(browser, { name: 'TOTO', query: BOT });
+  await joinLobby(toto, code);
+  await expect(page.getByTestId('players-count')).toHaveText('PLAYERS 3/8');
+  await page.getByTestId('btn-start').click();
+  await until(page, 'window.__dwf.watch !== undefined', 100_000);
+  for (let i = 0; i < 5; i++) {
+    const target = await page.evaluate(() => window.__dwf!.watch!.target);
+    await rowOf(page, target === 'p2' ? 'p3' : 'p2').click();
+    await page.waitForTimeout(4000);
+  }
+  const video = rara.video()!;
+  await context.close();
+  await toto.context().close();
+  mkdirSync(SHOTS, { recursive: true });
+  copyFileSync(await video.path(), `${SHOTS}${info.project.name}-watched.webm`);
 });

@@ -23,7 +23,9 @@ MENU goes back to the title screen, and the speaker in the top right corner swit
 4. The host, who made the lobby, presses START. Everyone counts down together and runs the same course, and the tower in the top left corner shows who is ahead.
 5. The round is over when everyone is out, or when the one still running is ahead of all the others. After the results everyone is back in the lobby, ready for the next round.
 
-A lobby holds up to 8 players. A friend who comes in during a round watches the tower and plays the next one.
+A lobby holds up to 8 players, and a friend who comes in during a round plays the next one. Until then, and once you are out, you watch the runner in the lead: tap a name in the tower, or press ← and →, to watch someone else. Whoever you watch sees your dino's head peeking in at the edge of their screen.
+
+If the connection drops, the game gets back in by itself. Your seat is kept for 2 minutes in the lobby, and for 10 seconds in the middle of a round.
 
 ## Run locally
 
@@ -44,6 +46,7 @@ Open http://localhost:5173. To play on a phone, join the same Wi-Fi network as t
 - **The screens** around the game (title, credits, lobby, race, results, buttons) are React components in [`src/app/`](src/app/).
 - **The lobby rules** live in [`shared/lobby/`](shared/lobby/): who is in a lobby and who is the host, the countdown, the tower and the results, as a plain state machine that the client and the server share and that is tested without a server.
 - **The lobby server** is a Cloudflare Worker with a Durable Object, `Lobby`, for each lobby, in [`worker/`](worker/). The players' WebSockets stay open on the object while it sleeps between messages, and a round runs on the server's clock, which every browser keeps in step with.
+- **Watching:** the lobby passes each runner's states on to whoever watches them, and the screen they watch is drawn from those states a little behind the shared clock, moving smoothly from one to the next.
 - **On a laptop**, `npm run dev` runs the Worker and the Durable Object too, through the Cloudflare plugin for Vite, so a phone on the same Wi-Fi can join a race through the laptop's LAN address.
 - **Hosting:** Cloudflare builds every push to `main` with `npm run build` and serves the files in `dist/` as a Worker ([`wrangler.jsonc`](wrangler.jsonc)). The same Worker answers `/api/lobby` and `/ws/…`, where the lobbies are.
 
