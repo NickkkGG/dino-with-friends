@@ -1,19 +1,27 @@
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { expect, it } from 'vitest';
-import viteConfig from '../../vite.config';
 
-// Cloudflare builds the site from the repository with `npm run build`, then `wrangler deploy` serves the files the build
-// left in dist/ under the Worker named here, at dino-with-friends.<account>.workers.dev.
-const wrangler = () => JSON.parse(readFileSync(fileURLToPath(new URL('../../wrangler.jsonc', import.meta.url)), 'utf8'));
+// Cloudflare builds the repository with `npm run build`, then `wrangler deploy` puts up the Worker named here, at
+// dino-with-friends.<account>.workers.dev: the lobby server for /api and /ws, and the built site for everything else.
+const read = (path: string) => readFileSync(fileURLToPath(new URL(`../../${path}`, import.meta.url)), 'utf8');
+const wrangler = () => JSON.parse(read('wrangler.jsonc'));
 
-it('serves the build output as the dino-with-friends Worker', () => {
-  const config = wrangler();
-  expect(config.name).toBe('dino-with-friends');
-  expect(config.assets).toEqual({ directory: `./${viteConfig.build?.outDir ?? 'dist'}` });
-  expect(config.compatibility_date).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+it('runs the lobby Worker first for /api and /ws, and serves the built site for the rest', () => {
+  const c = wrangler();
+  expect(c.name).toBe('dino-with-friends');
+  expect(c.main).toBe('./worker/index.ts');
+  expect(c.assets).toEqual({ not_found_handling: 'single-page-application', run_worker_first: ['/api/*', '/ws/*'] });
+  expect(c.compatibility_date).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+  expect(c.send_metrics).toBe(false);
 });
 
-it('has no Worker code yet, so every request is answered with a file from the build', () => {
-  expect(wrangler().main).toBeUndefined();
+it('binds one Durable Object class, Lobby, stored in SQLite', () => {
+  const c = wrangler();
+  expect(c.durable_objects).toEqual({ bindings: [{ name: 'LOBBY', class_name: 'Lobby' }] });
+  expect(c.migrations).toEqual([{ tag: 'v1', new_sqlite_classes: ['Lobby'] }]);
+});
+
+it('builds on Node 24 on Cloudflare too', () => {
+  expect(read('.node-version').trim()).toBe('24');
 });

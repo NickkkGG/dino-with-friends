@@ -1,8 +1,8 @@
+import { cloudflare } from '@cloudflare/vite-plugin';
 import react from '@vitejs/plugin-react';
-import { defineConfig } from 'vitest/config';
+import { defineConfig } from 'vite';
 
 export default defineConfig({
-  plugins: [react()],
+  plugins: [react(), cloudflare()],
   server: { host: true, port: 5173, strictPort: true },
-  test: { include: ['tests/unit/**/*.test.ts'], environment: 'node' },
 });
