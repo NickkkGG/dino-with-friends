@@ -5,6 +5,7 @@ import type { Sound } from '../game/sound';
 import type { SpriteSet } from '../game/sprites';
 import { readText, writeText } from '../game/storage';
 import type { TestMode } from '../game/test-mode';
+import { holdScreenOn } from '../game/wake-lock';
 import { createLobby } from '../net/api';
 import { LobbySession } from '../net/session';
 import type { SessionError, SessionView } from '../net/session';
@@ -126,6 +127,10 @@ export function MultiplayerFlow({ sprites, sound, testMode, onExit, onScreen }: 
   const racing = inLobby && results === null && (view.phase === 'countdown' || view.phase === 'playing');
   const screen = results ? 'results' : racing ? 'race' : inLobby ? 'lobby' : naming ? 'name' : 'multiplayer';
   useEffect(() => onScreen(screen), [screen, onScreen]);
+
+  // The screen stays on in a lobby, through its rounds and while the connection comes back, as a phone would otherwise
+  // go dark in the middle of a race.
+  useEffect(() => (inLobby ? holdScreenOn() : undefined), [inLobby]);
 
   if (inLobby) {
     if (results) {

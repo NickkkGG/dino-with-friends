@@ -57,7 +57,7 @@ function useDebugHook(screen: string, sound: Sound): void {
 // The game: the sprites and the sound, loaded once, and the screen on show.
 function Game({ first }: { first: Screen }) {
   const [screen, setScreen] = useState<Screen>(first);
-  // Which of its screens the multiplayer flow shows: name, multiplayer or lobby.
+  // Which of its screens the multiplayer flow shows: name, multiplayer, lobby, race or results.
   const [flowScreen, setFlowScreen] = useState('multiplayer');
   const [sprites, setSprites] = useState<SpriteSet | null>(null);
   const [sound] = useState(() => new Sound(SOUND_URLS));
