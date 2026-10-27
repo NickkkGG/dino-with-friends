@@ -76,23 +76,26 @@ it('sends the tower at once when someone is out', () => {
     { id: 'p1', score: 60, hp: 3, alive: true },
     { id: 'p2', score: 50, hp: 0, alive: false },
   ]);
-  expect(h.inbox('c1').map((m) => m.type)).toEqual(['tower', 'end', 'lobby', 'watching']);
+  expect(h.inbox('c1').map((m) => m.type)).toEqual(['tower']); // NICK still runs, so the round goes on
 });
 
-it('ends when the one left is ahead of every final score', () => {
+it('goes on while one is still running, however far ahead of every final score, and ends once they are out', () => {
   const h = lobbyHarness();
   race(h);
   h.advance(3000);
   h.send('c2', { type: 'dead', d: 2000 }); // 50, under the cap for 3 s
-  h.advance(100);
-  h.send('c1', runAt(3100, 2000)); // 50: not yet
+  for (let t = 3100; t <= 9000; t += 100) {
+    h.advance(100);
+    h.send('c1', runAt(t, t * 0.68)); // 53 at 3.1 s, 153 at 9 s
+  }
+  expect(row(h, 'c1', 'p1')).toMatchObject({ hp: 3, alive: true });
   expect(h.last('c1', 'end')).toBeUndefined();
   h.advance(100);
-  h.send('c1', runAt(3200, 2040)); // 51: over
+  h.send('c1', { type: 'dead', d: 6200 }); // 155
   expect(h.last('c2', 'end')).toEqual({
     type: 'end', round: 1,
     results: [
-      { id: 'p1', name: 'NICK', score: 51, place: 1 },
+      { id: 'p1', name: 'NICK', score: 155, place: 1 },
       { id: 'p2', name: 'RARA', score: 50, place: 2 },
     ],
   });
@@ -161,7 +164,7 @@ it('counts a player out who presses LEAVE mid-round', () => {
   h.send('c2', runAt(1000, 600));
   h.send('c2', { type: 'leave' });
   expect(h.closed).toEqual(['c2']);
-  // RARA is out at 15, ahead of NICK's 0 while NICK still runs: not over until NICK is ahead.
+  // RARA is out at 15, and the round goes on while NICK still runs.
   expect(row(h, 'c1', 'p2')).toEqual({ id: 'p2', score: 15, hp: 0, alive: false });
   expect(h.last('c1', 'end')).toBeUndefined();
 });
@@ -205,7 +208,7 @@ it('counts a player out after 10 s without a state, from the alarm alone', () =>
   h.advance(100);
   h.alarm();
   expect(row(h, 'c1', 'p2')).toMatchObject({ alive: false, score: 0 });
-  expect(h.last('c1', 'end')).toBeDefined(); // p1 is already ahead of 0
+  expect(h.last('c1', 'end')).toBeUndefined(); // p1 still runs
 });
 
 it('keeps a runner in while their states come', () => {
@@ -375,5 +378,5 @@ it('still counts a runner out 10 s after their last state, with the alarm only m
   lobby.advance(100);
   expect(h.now - startAt).toBe(40_000);
   expect(row(h, 'c1', 'p2')).toMatchObject({ alive: false });
-  expect(h.last('c1', 'end')).toBeDefined(); // NICK is ahead of RARA's final score
+  expect(h.last('c1', 'end')).toBeUndefined(); // NICK still runs
 });

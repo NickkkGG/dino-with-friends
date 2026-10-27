@@ -43,6 +43,9 @@ export function until(page: Page, condition: string, timeout = 10_000): Promise<
 /** The query that makes a player a bot that cannot lose: it jumps by itself, and nothing costs it a heart. */
 export const BOT = '?autopilot=1&invincible=1';
 
+/** A bot like BOT that is out all the same at second `s` of every round, so a round of bots comes to an end. */
+export const botOutAt = (s: number): string => `${BOT}&loseAt=${s}`;
+
 export interface Friend {
   name: string;
   query?: string;

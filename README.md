@@ -21,7 +21,7 @@ MENU goes back to the title screen, and the speaker in the top right corner swit
 2. Choose CREATE LOBBY and share the code that comes up (TAP TO COPY copies it).
 3. Your friends choose MULTIPLAYER, type the code under JOIN WITH CODE, and choose JOIN.
 4. The host, who made the lobby, presses START. Everyone counts down together and runs the same course, and the tower in the top left corner shows who is ahead.
-5. The round is over when everyone is out, or when the one still running is ahead of all the others. After the results everyone is back in the lobby, ready for the next round.
+5. The round goes on until everyone is out, so the last one running plays on while the others watch. After the results everyone is back in the lobby, ready for the next round.
 
 A lobby holds up to 8 players, and a friend who comes in during a round plays the next one. Until then, and once you are out, you watch the runner in the lead: tap a name in the tower, or press ← and →, to watch someone else. Whoever you watch sees your dino's head peeking in at the edge of their screen.
 

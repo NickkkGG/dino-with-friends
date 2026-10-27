@@ -3,7 +3,7 @@ import { fileURLToPath } from 'node:url';
 import { expect, test } from '@playwright/test';
 import type { Page, TestInfo } from '@playwright/test';
 import { makeCode } from '../../shared/lobby/code';
-import { BOT, createLobby, cutter, joinLobby, named, openPlayer, rowOf, startRace } from './players';
+import { BOT, botOutAt, createLobby, cutter, joinLobby, named, openPlayer, rowOf, startRace } from './players';
 
 // Screenshots of every screen and two short videos, for checking the game by eye. They go to shots/, which git ignores.
 
@@ -187,6 +187,15 @@ for (const landscape of [false, true]) {
       for (const f of friends) await f.context().close();
     });
 
+    test('multiplayer: one of two out, watching the last one run on', async ({ page, browser }, info) => {
+      test.setTimeout(150_000);
+      const [friend] = await startRace(page, browser, [{ name: 'RARA', query: BOT }]);
+      await page.getByTestId('watch-label').waitFor({ timeout: 100_000 });
+      await page.waitForTimeout(600); // the screen watched has come up
+      await shoot(page, info, `mp-watch-last${tag}`);
+      await friend!.context().close();
+    });
+
     test('multiplayer: watching after GAME OVER, and the screen watched', async ({ page, browser }, info) => {
       test.setTimeout(150_000);
       const friends = await startRace(page, browser, [
@@ -247,7 +256,7 @@ for (const landscape of [false, true]) {
 
     test('multiplayer: the results', async ({ page, browser }, info) => {
       test.setTimeout(120_000);
-      const [friend] = await startRace(page, browser, [{ name: 'RARA' }], BOT);
+      const [friend] = await startRace(page, browser, [{ name: 'RARA', query: botOutAt(5) }], botOutAt(10));
       await page.getByTestId('results-screen').waitFor({ timeout: 90_000 });
       await page.waitForTimeout(300);
       await shoot(page, info, `mp-results${tag}`);

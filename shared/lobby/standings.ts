@@ -22,20 +22,9 @@ export function rankStandings<T extends Standing>(rows: readonly T[]): T[] {
   );
 }
 
-/** Whether the round is decided: nobody is running, or the only one still running is ahead of every final score. */
+/** Whether the round is over: nobody is running any more. The last one still running plays on until they are out too. */
 export function roundOver(rows: readonly Standing[]): boolean {
-  let running = 0;
-  let leader = 0;
-  let bestOut = -Infinity;
-  for (const row of rows) {
-    if (row.alive) {
-      running++;
-      leader = row.score;
-    } else if (row.score > bestOut) {
-      bestOut = row.score;
-    }
-  }
-  return running === 0 || (running === 1 && leader > bestOut);
+  return !rows.some((row) => row.alive);
 }
 
 /** The farthest a dino can go in one step: top speed with the SPEED skill on. */

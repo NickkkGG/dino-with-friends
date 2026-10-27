@@ -1,6 +1,6 @@
 import type { RunState } from '../../shared/lobby/protocol';
 import { botInput, earliestSafe } from '../../shared/sim/autopilot';
-import { CLEAR_STEPS, TREX_X } from '../../shared/sim/constants';
+import { CLEAR_STEPS, STEP_MS, TREX_X } from '../../shared/sim/constants';
 import { NO_EVENTS, createWorld, retire, skipSteps, stepWorld } from '../../shared/sim/world';
 import type { World } from '../../shared/sim/world';
 import { Scene } from './draw/scene';
@@ -186,7 +186,14 @@ export class RaceRun {
     if (ev.achievement) sound.play('reached');
     if (ev.picked) sound.play('pickup');
     this.scene.step(w, ev);
-    if (ev.died) {
+    // The dev test mode's loseAt: out at that second of the round, even a dino that cannot lose.
+    const { loseAt } = this.o.testMode;
+    const lost = !ev.died && loseAt !== null && w.step * STEP_MS >= loseAt * 1000;
+    if (lost) {
+      w.hp = 0;
+      retire(w);
+    }
+    if (ev.died || lost) {
       this.out();
       // The ones watching see the crash and GAME OVER too: the state with no hearts goes before the death.
       this.o.send.state(runState(w));

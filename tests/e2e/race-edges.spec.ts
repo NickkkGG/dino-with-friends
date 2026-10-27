@@ -1,7 +1,7 @@
 import { expect, test } from '@playwright/test';
 import type { Page } from '@playwright/test';
 import { makeCode } from '../../shared/lobby/code';
-import { BOT, createLobby, joinLobby, named, openPlayer, startRace, until } from './players';
+import { BOT, botOutAt, createLobby, joinLobby, named, openPlayer, startRace, until } from './players';
 
 // The edges of a race with friends: a full lobby, players who leave in the middle of a round, and every multiplayer
 // screen on a laptop, an upright phone and a phone on its side.
@@ -63,7 +63,8 @@ test('LOBBY IS FULL for the ninth player', async ({ page, browser }) => {
 
 test('a friend who closes the page mid-race is out, and the race still ends', async ({ page, browser }) => {
   test.setTimeout(90_000);
-  const [rara] = await startRace(page, browser, [{ name: 'RARA' }], BOT);
+  // NICK, a bot, is out at 20 s, after RARA has been counted out.
+  const [rara] = await startRace(page, browser, [{ name: 'RARA' }], botOutAt(20));
   await until(page, 'window.__dwf?.race?.phase === "running" && window.__dwf.step > 120');
   await rara!.context().close();
   await expect(page.getByTestId('results-screen')).toBeVisible({ timeout: 30_000 });
@@ -97,7 +98,7 @@ test('a host who closes the page mid-race is out 10 s later, and keeps the seat'
   const rara = await openPlayer(browser, { name: 'RARA', query: BOT });
   const code = await createLobby(rara);
   await named(page, 'NICK');
-  await page.goto('/');
+  await page.goto(`/${botOutAt(20)}`); // out at 20 s, after RARA has been counted out
   await joinLobby(page, code);
   await expect(rara.getByTestId('players-count')).toHaveText('PLAYERS 2/8');
   await rara.getByTestId('btn-start').click();
@@ -134,7 +135,7 @@ for (const size of [{ width: 1440, height: 900 }, { width: 390, height: 844 }, {
     await page.getByTestId('btn-create').click();
     const code = page.getByTestId('lobby-code');
     await expect(code).toHaveText(/^[A-Z2-9]{6}$/);
-    const friend = await openPlayer(browser, { name: 'RARA', query: BOT });
+    const friend = await openPlayer(browser, { name: 'RARA', query: botOutAt(10) });
     await joinLobby(friend, (await code.textContent()) ?? '');
     await expect(page.getByTestId('players-count')).toHaveText('PLAYERS 2/8');
     expect(await outside(page)).toEqual([]);

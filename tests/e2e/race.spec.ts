@@ -1,6 +1,6 @@
 import { expect, test } from '@playwright/test';
 import type { Page } from '@playwright/test';
-import { BOT, openPlayer, rowOf, startRace, until } from './players';
+import { BOT, botOutAt, openPlayer, rowOf, startRace, until } from './players';
 
 // A round of the race, in the dev build with the lobby server running locally. NICK plays on the project's own screen,
 // makes the lobby and starts the round; the others join it in windows of their own.
@@ -69,8 +69,8 @@ test('the host starts: everyone counts down together and runs on the same clock'
 
 test('a dino that is out stays on GAME OVER for its first 2 s', async ({ page, browser }) => {
   test.setTimeout(120_000);
-  // Two who cannot lose keep the round going once NICK is out; one alone, and ahead of NICK, would end it there.
-  const friends = await startRace(page, browser, [{ name: 'RARA', query: BOT }, { name: 'TOTO', query: BOT }]);
+  // A friend who cannot lose keeps the round going once NICK is out.
+  const friends = await startRace(page, browser, [{ name: 'RARA', query: BOT }]);
   await until(page, 'window.__dwf?.phase === "dead"', 90_000);
   expect(await page.evaluate(() => [window.__dwf!.screen, window.__dwf!.phase, window.__dwf!.race?.phase])).toEqual([
     'race', 'dead', 'dead',
@@ -104,7 +104,8 @@ test('the race screen keeps the tower and the track apart', async ({ page, brows
 
 test('a full race: results, the winner, and back to the lobby for round 2', async ({ page, browser }) => {
   test.setTimeout(120_000);
-  const [friend] = await startRace(page, browser, [{ name: 'RARA', query: BOT }]);
+  // Two bots on the same course: NICK is out at 4 s, and RARA, ahead from then on, at 8 s, which ends the round.
+  const [friend] = await startRace(page, browser, [{ name: 'RARA', query: botOutAt(8) }], botOutAt(4));
   await expect(page.getByTestId('results-screen')).toBeVisible({ timeout: 90_000 });
   await expect(page.getByTestId('auto-back')).toHaveText('AUTOMATIC IN 5');
   for (const p of [page, friend!]) {
@@ -134,7 +135,7 @@ test('a full race: results, the winner, and back to the lobby for round 2', asyn
 
 test('BACK TO LOBBY goes back at once', async ({ page, browser }) => {
   test.setTimeout(120_000);
-  const [friend] = await startRace(page, browser, [{ name: 'RARA', query: BOT }]);
+  const [friend] = await startRace(page, browser, [{ name: 'RARA', query: botOutAt(6) }], botOutAt(3));
   await expect(page.getByTestId('results-screen')).toBeVisible({ timeout: 90_000 });
   const shown = Date.now();
   await page.getByTestId('btn-back-to-lobby').click();
@@ -149,7 +150,7 @@ test('BACK TO LOBBY goes back at once', async ({ page, browser }) => {
 
 test('a friend who comes in during the race watches the leader, then plays the next round', async ({ page, browser }) => {
   test.setTimeout(150_000);
-  const [rara] = await startRace(page, browser, [{ name: 'RARA' }], BOT);
+  const [rara] = await startRace(page, browser, [{ name: 'RARA', query: botOutAt(15) }], botOutAt(30));
   await until(page, 'window.__dwf?.race?.phase === "running"');
   const code = (await page.evaluate(() => window.__dwf!.lobby!.code)) ?? '';
   const dika = await openPlayer(browser, { name: 'DIKA' });
@@ -160,7 +161,7 @@ test('a friend who comes in during the race watches the leader, then plays the n
   await expect(dika.getByTestId('next-round')).toHaveText('YOU PLAY NEXT ROUND');
   await expect(dika.getByTestId('board-row')).toHaveCount(2);
   await expect(dika.getByTestId('race-canvas')).toHaveAttribute('data-mode', 'watch');
-  // RARA, who plays nothing, is out: DIKA sees the results of the round they watched, then everyone is in the lobby.
+  // RARA is out at 15 s and NICK at 30 s: DIKA sees the results of the round they watched, then everyone is in the lobby.
   await expect(dika.getByTestId('results-screen')).toBeVisible({ timeout: 90_000 });
   await expect(dika.getByTestId('winner')).toHaveText('NICK WINS!');
   for (const p of [page, dika]) await expect(p.getByTestId('lobby-screen')).toBeVisible({ timeout: 10_000 });

@@ -21,13 +21,14 @@ it('ranks a copy and leaves the rows it was given as they were', () => {
   expect(rows.map((r) => r.id)).toEqual(['a', 'b']);
 });
 
-it('ends a round when all are out, or the one left is ahead of every final score', () => {
+it('ends a round only once every runner is out, however far ahead the last one is', () => {
   expect(roundOver([row('a', 5, false, 1), row('b', 9, false, 2)])).toBe(true);
   expect(roundOver([row('a', 5), row('b', 9)])).toBe(false);
-  expect(roundOver([row('a', 51), row('b', 50, false, 1)])).toBe(true);
+  expect(roundOver([row('a', 51), row('b', 50, false, 1)])).toBe(false);
   expect(roundOver([row('a', 50), row('b', 50, false, 1)])).toBe(false);
   expect(roundOver([row('a', 49), row('b', 50, false, 1)])).toBe(false);
-  expect(roundOver([row('a', 0)])).toBe(true);
+  expect(roundOver([row('a', 900), row('b', 10, false, 1), row('c', 20, false, 2)])).toBe(false);
+  expect(roundOver([row('a', 0)])).toBe(false);
 });
 
 it('keeps a run within what the fastest dino could do', () => {

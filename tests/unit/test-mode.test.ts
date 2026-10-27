@@ -4,10 +4,12 @@ import { NO_TEST_MODE, parseTestMode } from '../../src/game/test-mode';
 it('reads seed, timeScale (1..8), box, invincible and autopilot only in dev', () => {
   const all = '?seed=7&timeScale=4&box=ghost&invincible=1&autopilot=1';
   expect(parseTestMode(all, true)).toEqual({
-    seed: 7, timeScale: 4, box: 'ghost', invincible: true, autopilot: true, version: null,
+    seed: 7, timeScale: 4, box: 'ghost', invincible: true, autopilot: true, version: null, loseAt: null,
   });
   expect(parseTestMode(all, false)).toEqual(NO_TEST_MODE);
-  expect(NO_TEST_MODE).toEqual({ seed: null, timeScale: 1, box: null, invincible: false, autopilot: false, version: null });
+  expect(NO_TEST_MODE).toEqual({
+    seed: null, timeScale: 1, box: null, invincible: false, autopilot: false, version: null, loseAt: null,
+  });
   expect(parseTestMode('', true)).toEqual(NO_TEST_MODE);
   expect(parseTestMode('?view=solo', true)).toEqual(NO_TEST_MODE);
 });
@@ -31,4 +33,11 @@ it('takes a build version to say, in the dev build only', () => {
   expect(parseTestMode('?version=old', true).version).toBe('old');
   expect(parseTestMode('?version=old', false).version).toBeNull();
   for (const bad of ['?version=', '?version=Old', `?version=${'a'.repeat(33)}`]) expect(parseTestMode(bad, true).version).toBeNull();
+});
+
+it('takes the second of a race a dino is out at, whole seconds from 1 to 600, in the dev build only', () => {
+  expect(parseTestMode('?loseAt=20', true).loseAt).toBe(20);
+  expect(parseTestMode('?loseAt=600', true).loseAt).toBe(600);
+  expect(parseTestMode('?loseAt=20', false).loseAt).toBeNull();
+  for (const bad of ['', '0', '1.5', '-3', '601', 'soon']) expect(parseTestMode(`?loseAt=${bad}`, true).loseAt).toBeNull();
 });

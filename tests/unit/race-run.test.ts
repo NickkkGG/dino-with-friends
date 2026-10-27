@@ -212,3 +212,13 @@ it('lets the bot play in the dev test mode', () => {
   frameUntil(run, input, START, () => run.world.trex.jumping, 20_000);
   expect(played).toContain('press');
 });
+
+it('in the dev test mode, puts a dino that cannot lose out all the same at the second it is told', () => {
+  const { run, input, states, deaths } = setUp({ autopilot: true, invincible: true, loseAt: 2 });
+  frameUntil(run, input, START, () => deaths.length === 1, 3000);
+  expect(run.view().phase).toBe('dead');
+  expect(run.world.phase).toBe('dead');
+  expect(run.world.step).toBe(120); // the step that reaches 2 s
+  expect(states.at(-1)!.hp).toBe(0); // those watching see it out too
+  expect(deaths).toEqual([run.world.distance]);
+});
