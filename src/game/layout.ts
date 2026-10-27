@@ -128,3 +128,11 @@ export interface MenuSizes {
 export function menuSizes(vw: number): MenuSizes {
   return vw < 600 ? { title: 2.5, body: 2, small: 1.5, code: 5 } : { title: 3, body: 2, small: 1.5, code: 6 };
 }
+
+/** The leaderboard in cells of its text: a line is `width` wide and `row` high, under a title `title` high. */
+export const BOARD_CELLS = { width: 140, row: 12, title: 11 } as const;
+
+/** How many cells high a leaderboard of `rows` lines is. */
+export function boardHeightCells(rows: number): number {
+  return BOARD_CELLS.title + BOARD_CELLS.row * rows;
+}

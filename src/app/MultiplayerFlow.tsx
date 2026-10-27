@@ -119,7 +119,7 @@ export function MultiplayerFlow({ sprites, sound, onExit, onScreen }: Multiplaye
       session.leave();
       close();
     };
-    return <LobbyScreen sprites={sprites} sound={sound} view={view} onLeave={leave} />;
+    return <LobbyScreen sprites={sprites} sound={sound} view={view} onLeave={leave} onStart={() => session.start()} />;
   }
   if (naming) {
     const done = (n: string) => {

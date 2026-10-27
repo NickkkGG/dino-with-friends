@@ -1,5 +1,5 @@
 import { expect, it } from 'vitest';
-import { HUD_STRIP, SKY, menuSizes, soloLayout, titleLayout } from '../../src/game/layout';
+import { HUD_STRIP, SKY, boardHeightCells, menuSizes, soloLayout, titleLayout } from '../../src/game/layout';
 import type { TitleLayout } from '../../src/game/layout';
 
 it('laptop 1440×900: wide, full width, world centred', () => {
@@ -91,4 +91,9 @@ it('sizes the menu text for a phone and a laptop', () => {
   expect(menuSizes(390)).toEqual({ title: 2.5, body: 2, small: 1.5, code: 5 });
   expect(menuSizes(1440)).toEqual({ title: 3, body: 2, small: 1.5, code: 6 });
   expect([menuSizes(599).title, menuSizes(600).title]).toEqual([2.5, 3]);
+});
+
+it('measures the tower in cells: a title, then 12 a line', () => {
+  expect(boardHeightCells(8)).toBe(107);
+  expect(boardHeightCells(2)).toBe(35);
 });

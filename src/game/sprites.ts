@@ -1,4 +1,6 @@
 import { SPRITE_1X_URL, SPRITE_2X_URL, loadImage } from './assets';
+import { headsFrom } from './heads';
+import type { Heads } from './heads';
 import type { RenderParams } from './render-params';
 import { HDPI_POS, LDPI_POS } from './sprite-defs';
 import type { SpritePositions } from './sprite-defs';
@@ -15,10 +17,11 @@ export interface SpriteSheet {
   faceRowY: { normal: number; hurt: number; low: number };
 }
 
-/** Both sheets, each with its face rows. */
+/** Both sheets, each with its face rows, and the heads cut from the 1x sheet. */
 export interface SpriteSet {
   x1: SpriteSheet;
   x2: SpriteSheet;
+  heads: Heads;
 }
 
 /** One pixel to repaint in a dino frame, in 1x pixels from the frame's corner: 'd' is the body's grey, 'l' the white. */
@@ -105,10 +108,11 @@ export function buildSheet(img: HTMLImageElement, scale: 1 | 2): SpriteSheet {
   return { canvas, scale, pos, faceRowY };
 }
 
-/** Loads the 1x and the 2x sheet and adds the face rows to both. */
+/** Loads the 1x and the 2x sheet, adds the face rows to both, and cuts the heads. */
 export async function loadSpriteSet(): Promise<SpriteSet> {
   const [one, two] = await Promise.all([loadImage(SPRITE_1X_URL), loadImage(SPRITE_2X_URL)]);
-  return { x1: buildSheet(one, 1), x2: buildSheet(two, 2) };
+  const x1 = buildSheet(one, 1);
+  return { x1, x2: buildSheet(two, 2), heads: headsFrom(x1) };
 }
 
 /** The sheet a canvas with these render params draws from. */

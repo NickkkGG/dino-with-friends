@@ -50,3 +50,15 @@ test.describe('scenes', () => {
     });
   }
 });
+
+// The heads of the leaderboard and the player list, cut from the 1x sprite when the game loads: 11 × 8 each.
+const ALIVE = ['..########.', '.##.#######', '.##########', '.##########', '.##########', '.#####.....', '.########..', '#####......'];
+const BLINK = ['..########.', '.##########', '.##########', '.##########', '.##########', '.#####.....', '.########..', '#####......'];
+const DEAD = ['..########.', '.##..######', '.##.#######', '.##########', '.##########', '.##########', '.########..', '#####......'];
+
+test('the leaderboard heads are cut from the sprite', async ({ page }) => {
+  await page.goto('/?view=sprites');
+  for (const [id, rows] of [['head-alive', ALIVE], ['head-blink', BLINK], ['head-dead', DEAD]] as const) {
+    await expect(page.getByTestId(id)).toHaveAttribute('data-rows', rows.join('|'));
+  }
+});

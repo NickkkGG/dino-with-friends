@@ -323,3 +323,60 @@ body {
   align-items: center;
   gap: 12px;
 }
+
+/* LOBBY: the code is a button in a dashed box, and each player a line over a faint rule. */
+.lobby-code {
+  appearance: none;
+  margin: 0;
+  padding: 12px 20px;
+  border: 1px dashed #535353;
+  background: none;
+  line-height: 0;
+  cursor: pointer;
+}
+
+.players-count {
+  align-self: stretch;
+}
+
+.player-list {
+  align-self: stretch;
+  display: flex;
+  flex-direction: column;
+}
+
+.player-row {
+  height: 28px;
+  box-sizing: border-box;
+  border-bottom: 1px solid #dcdcdc;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.player-host {
+  margin-left: auto;
+  line-height: 0;
+}
+
+/* The leaderboard: every part of a line placed in cells, and a line that changes place slides there. */
+.leaderboard {
+  position: relative;
+}
+
+.board-row {
+  position: absolute;
+  left: 0;
+  top: 0;
+  transition: transform 300ms ease-out;
+}
+
+.board-part {
+  position: absolute;
+  line-height: 0;
+}
+
+.board-box {
+  position: absolute;
+  background: #535353;
+}

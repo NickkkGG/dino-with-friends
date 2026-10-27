@@ -3,7 +3,9 @@ import * as B from '../../game/bitmaps';
 import { INK, PAPER, SOFT } from '../../game/colors';
 import { blit, fillCells } from '../../game/draw/context';
 import type { DrawContext } from '../../game/draw/context';
+import type { Heads } from '../../game/heads';
 import { loadSpriteSet } from '../../game/sprites';
+import { PixelIcon } from '../../ui/PixelIcon';
 import type { SpriteSheet } from '../../game/sprites';
 
 // A dev page for checking the sprites by eye: both sheets at the same size on screen (the 1x sheet zoomed 4×, the 2x
@@ -83,6 +85,7 @@ export function SpriteSheetView() {
   const one = useRef<HTMLCanvasElement>(null);
   const two = useRef<HTMLCanvasElement>(null);
   const [ready, setReady] = useState(false);
+  const [heads, setHeads] = useState<Heads | null>(null);
 
   useEffect(() => {
     let live = true;
@@ -90,6 +93,7 @@ export function SpriteSheetView() {
       if (!live || !one.current || !two.current) return;
       drawSheet(one.current, set.x1);
       drawSheet(two.current, set.x2);
+      setHeads(set.heads);
       setReady(true);
     });
     return () => {
@@ -106,6 +110,15 @@ export function SpriteSheetView() {
         <canvas ref={one} style={canvas} />
         <p style={label}>2x sheet, zoom 2. Last row: dead, GHOST, box, hearts, spark, sweat, puff, skill icons, sound.</p>
         <canvas ref={two} style={canvas} />
+        <p style={label}>Leaderboard heads, cut from the 1x sheet, zoom 8: alive, blink, dead.</p>
+        <div style={{ display: 'flex', gap: 32 }}>
+          {heads &&
+            (['alive', 'blink', 'dead'] as const).map((k) => (
+              <div key={k} data-testid={`head-${k}`} data-rows={heads[k].join('|')}>
+                <PixelIcon rows={heads[k]} size={8} />
+              </div>
+            ))}
+        </div>
       </div>
     </div>
   );

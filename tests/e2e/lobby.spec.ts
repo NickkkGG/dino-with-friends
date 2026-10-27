@@ -1,6 +1,7 @@
+import { networkInterfaces } from 'node:os';
 import { expect, test } from '@playwright/test';
 import { makeCode } from '../../shared/lobby/code';
-import { createLobby, named } from './players';
+import { createLobby, joinLobby, named, openPlayer } from './players';
 
 // YOUR NAME, MULTIPLAYER and the way into a lobby, in the dev build with the lobby server running locally.
 
@@ -99,4 +100,69 @@ test('< LEAVE goes back to MULTIPLAYER', async ({ page }) => {
   await expect(page.getByTestId('multiplayer-screen')).toBeVisible();
   await expect(page.getByTestId('mp-error')).toHaveCount(0);
   expect(await page.evaluate(() => window.__dwf!.lobby)).toBeNull();
+});
+
+test('two players in a lobby: the host can start, the friend waits', async ({ page, browser }) => {
+  await named(page, 'NICK');
+  await page.goto('/');
+  const code = await createLobby(page);
+  await expect(page.getByTestId('players-count')).toHaveText('PLAYERS 1/8');
+  await expect(page.getByTestId('btn-start')).toHaveText('NEED 2 PLAYERS');
+  await expect(page.getByTestId('btn-start')).toBeDisabled();
+  await expect(page.getByTestId('host-note')).toHaveText('ONLY THE HOST CAN START');
+
+  const friend = await openPlayer(browser, { name: 'RARA' });
+  await joinLobby(friend, code);
+  for (const p of [page, friend]) {
+    await expect(p.getByTestId('players-count')).toHaveText('PLAYERS 2/8');
+    await expect(p.locator('[data-testid="player-row"][data-player-id="p1"]')).toHaveAttribute('data-host', 'true');
+    await expect(p.locator('[data-testid="player-row"][data-player-id="p2"]')).toHaveAttribute('data-host', 'false');
+  }
+  await expect(page.getByTestId('btn-start')).toHaveText('START');
+  await expect(page.getByTestId('btn-start')).toBeEnabled();
+  await expect(friend.getByTestId('waiting-host')).toHaveText('WAITING FOR HOST...');
+  await expect(friend.getByTestId('btn-start')).toHaveCount(0);
+  await friend.context().close();
+});
+
+test('the host leaves and the friend becomes host', async ({ page, browser }) => {
+  await named(page, 'NICK');
+  await page.goto('/');
+  const code = await createLobby(page);
+  const friend = await openPlayer(browser, { name: 'RARA' });
+  await joinLobby(friend, code);
+  await expect(friend.getByTestId('waiting-host')).toBeVisible();
+  await page.getByTestId('btn-leave').click();
+  await expect(friend.getByTestId('players-count')).toHaveText('PLAYERS 1/8');
+  await expect(friend.getByTestId('btn-start')).toHaveText('NEED 2 PLAYERS');
+  await expect(friend.locator('[data-testid="player-row"][data-player-id="p2"]')).toHaveAttribute('data-host', 'true');
+  await friend.context().close();
+});
+
+test('TAP TO COPY copies the code', async ({ page, context }, info) => {
+  const chromium = info.project.name.startsWith('chromium');
+  if (chromium) await context.grantPermissions(['clipboard-read', 'clipboard-write']);
+  await named(page, 'NICK');
+  await page.goto('/');
+  const code = await createLobby(page);
+  await expect(page.getByTestId('copy-hint')).toHaveText('TAP TO COPY');
+  await page.getByTestId('lobby-code').click();
+  await expect(page.getByTestId('copy-hint')).toHaveText('COPIED!');
+  if (chromium) expect(await page.evaluate(() => navigator.clipboard.readText())).toBe(code);
+  await expect(page.getByTestId('copy-hint')).toHaveText('TAP TO COPY', { timeout: 3000 });
+});
+
+test('TAP TO COPY copies the code on the Wi-Fi address too', async ({ browser }) => {
+  const ip = Object.values(networkInterfaces())
+    .flat()
+    .find((a) => a !== undefined && a.family === 'IPv4' && !a.internal)?.address;
+  test.skip(ip === undefined, 'this machine has no address on a local network');
+  const page = await browser.newPage();
+  await named(page, 'NICK');
+  await page.goto(`http://${ip}:5173/`);
+  expect(await page.evaluate(() => window.isSecureContext)).toBe(false);
+  await createLobby(page);
+  await page.getByTestId('lobby-code').click();
+  await expect(page.getByTestId('copy-hint')).toHaveText('COPIED!');
+  await page.close();
 });
