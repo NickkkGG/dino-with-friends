@@ -1,6 +1,6 @@
 import { expect, it } from 'vitest';
 import {
-  HUD_STRIP, PEEK_COLUMN, SKY, boardHeightCells, menuSizes, menuSpacing, raceLayout, soloLayout, titleLayout,
+  HUD_STRIP, PEEK_COLUMN, PEEK_SLOT_CELLS, SKY, boardHeightCells, menuSizes, menuSpacing, raceLayout, soloLayout, titleLayout,
 } from '../../src/game/layout';
 import type { RaceLayout, TitleLayout } from '../../src/game/layout';
 import { FONT_ROWS } from '../../src/ui/font';
@@ -207,7 +207,9 @@ it('puts the watching line between the tower and the HUD strip, and three heads 
 
 it('puts the heads and the switch hint along the top, on a phone on its side', () => {
   const l = raceLayout(844, 390, true, 3);
-  expect(l.peek).toEqual({ y: 12, cell: l.board.cell, max: 3 });
+  // The heads go down from under the sound button in the top right corner (4 px down, 38 high), and above the world.
+  expect(l.peek).toEqual({ y: 50, cell: l.board.cell, max: 3 });
+  expect(l.peek.y + (3 * PEEK_SLOT_CELLS + 9) * l.peek.cell).toBeLessThanOrEqual(l.canvas.y + SKY * l.scale);
   expect(l.hint.y).toBe(12);
   expect(l.label.y).toBeGreaterThan(l.canvas.y);
   expect(l.label.y + FONT_ROWS * l.label.cell).toBeLessThan(l.canvas.y + SKY * l.scale);

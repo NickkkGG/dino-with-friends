@@ -26,6 +26,10 @@ export interface LeaderboardProps {
   mode: 'race' | 'results';
   testId: string;
   rowTestId?: string;
+  /** The line of the runner being watched gets a frame. */
+  framed?: string | null;
+  /** Called with the id of a running runner's line that is tapped or clicked; those lines can be picked. */
+  onPick?: (id: string) => void;
 }
 
 // Where a line's parts are, in cells from its left end: the place, the head, the name, and the score's right edge.
@@ -38,9 +42,12 @@ const fiveDigits = (score: number): string => String(Math.min(99_999, Math.max(0
 
 /**
  * A leaderboard: its title, then a line for each player with the place, a head, the name and the score. A line is placed
- * by a transform that eases, so a player who moves up or down slides there.
+ * by a transform that eases, so a player who moves up or down slides there. The line of the runner being watched is
+ * framed, and with `onPick` the lines of the others still running can be picked.
  */
-export function Leaderboard({ title, rows, heads, cell, mode, testId, rowTestId = 'board-row' }: LeaderboardProps) {
+export function Leaderboard({
+  title, rows, heads, cell, mode, testId, rowTestId = 'board-row', framed = null, onPick,
+}: LeaderboardProps) {
   const at = (cells: number): string => `${cells * cell}px`;
   const width = (BOARD_CELLS.width + 2 * BOX_OUT) * cell;
   return (
@@ -54,6 +61,8 @@ export function Leaderboard({ title, rows, heads, cell, mode, testId, rowTestId 
         const color = lit ? PAPER : out ? DIM : INK;
         const score = fiveDigits(row.score);
         const part = (cells: number, top = 0) => ({ left: at(BOX_OUT + cells), top: at(top) });
+        const box = { left: 0, top: at(-BOX_OUT), width, height: at(BOX_H) };
+        const pickable = onPick !== undefined && row.alive && !row.me;
         return (
           <div
             key={row.id}
@@ -61,10 +70,18 @@ export function Leaderboard({ title, rows, heads, cell, mode, testId, rowTestId 
             data-player-id={row.id}
             data-me={row.me}
             data-alive={row.alive}
-            className="board-row"
-            style={{ width, transform: `translateY(${(BOARD_CELLS.title + i * BOARD_CELLS.row) * cell}px)` }}
+            data-framed={row.id === framed}
+            data-pickable={pickable}
+            className={pickable ? 'board-row pickable' : 'board-row'}
+            style={{
+              width,
+              height: at(BOARD_CELLS.row),
+              transform: `translateY(${(BOARD_CELLS.title + i * BOARD_CELLS.row) * cell}px)`,
+            }}
+            onClick={pickable ? () => onPick(row.id) : undefined}
           >
-            {lit && <span className="board-box" style={{ left: 0, top: at(-BOX_OUT), width, height: at(BOX_H) }} />}
+            {lit && <span className="board-box" style={box} />}
+            {row.id === framed && <span className="board-frame" style={{ ...box, borderWidth: cell }} />}
             <span className="board-part" style={part(COL.place)}>
               <PixelText text={String(i + 1)} size={cell} color={color} />
             </span>

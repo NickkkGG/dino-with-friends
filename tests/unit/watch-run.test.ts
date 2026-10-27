@@ -191,3 +191,20 @@ it('turns to night with the runner', () => {
   run.frame(shownAt(sent[11]!.s));
   expect(run.inverted).toBe(false);
 });
+
+it('when told the runner is out after their crash came, runs on to the crash and shows it at its own step', () => {
+  // The tower says a runner is out as soon as their crash is in, while the screen, drawn behind the clock, has not got
+  // there yet: the dino still runs into what it hit.
+  const sent = played({ steps: 6000, input: () => NO_INPUT });
+  const last = sent.at(-1)!.s;
+  const before = sent.findLast(({ s }) => s.t < last.t)!.s; // the crash can come with the time of the state before it
+  expect([before.hp > 0, last.hp]).toEqual([true, 0]);
+  const run = watcher();
+  run.add(before);
+  run.add(last);
+  run.out();
+  run.frame(shownAt(before));
+  expect(run.world.phase).toBe('running');
+  run.frame(shownAt(last));
+  expect([run.world.phase, run.world.scroll]).toEqual(['dead', last.x]);
+});

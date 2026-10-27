@@ -201,6 +201,8 @@ const HINT_CELL = 1.5;
 // its gap under the last one.
 const PEEK_PHONE = 3;
 const PEEK_LAPTOP = 7;
+// The sound button in the top right corner ends this far down: 4 px from the top, 12 px of padding around 7 cells of 2.
+const MUTE_BOTTOM = 42;
 const PEEK_CELL = 1.5;
 const PEEK_MORE_CELLS = 9;
 
@@ -247,14 +249,15 @@ export function raceLayout(vw: number, vh: number, coarse: boolean, dpr: number)
         hint: { y: vh - 16 - FONT_ROWS * HINT_CELL, cell: HINT_CELL },
       };
     }
-    // On its side the watching line is in the sky, and the heads and the hint are along the top, beside the tower.
+    // On its side the watching line is in the sky, and the hint and the heads are along the top, beside the tower: the
+    // heads from under the sound button.
     return {
       ...solo,
       board,
       code: null,
       count,
       label: inSky(canvas, solo.scale),
-      peek: { y: 12, cell: board.cell, max: PEEK_PHONE },
+      peek: { y: MUTE_BOTTOM + 8, cell: board.cell, max: PEEK_PHONE },
       hint: { y: 12, cell: HINT_CELL },
     };
   }

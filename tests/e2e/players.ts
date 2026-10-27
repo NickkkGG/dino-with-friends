@@ -69,3 +69,10 @@ export async function startRace(page: Page, browser: Browser, friends: Friend[],
 
 /** The line of player `id` on the race's tower. */
 export const rowOf = (page: Page, id: string) => page.locator(`[data-testid="board-row"][data-player-id="${id}"]`);
+
+/** Stops the page's frames, as a phone gone to another app: it sends no states from now on. */
+export async function stopFrames(page: Page): Promise<void> {
+  await page.evaluate(() => {
+    window.requestAnimationFrame = () => 0;
+  });
+}

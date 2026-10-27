@@ -91,7 +91,10 @@ export class WatchRun {
     else if (!latest || s.t > latest.t) this.states.push(s);
   }
 
-  /** The lobby has the runner out without a last state: GAME OVER on the picture there is. */
+  /**
+   * The lobby has the runner out. With the state of their crash in, the screen runs on to it and shows it at its own
+   * step; without one, GAME OVER on the picture there is.
+   */
   out(): void {
     this.isOut = true;
   }
@@ -108,7 +111,7 @@ export class WatchRun {
     const steps = Math.min(step - this.shown, RUN_ON_STEPS);
     this.shown = step;
     if (this.w.phase !== 'dead') {
-      if (this.isOut) this.w.phase = 'dead';
+      if (this.isOut && this.states.at(-1)!.hp > 0) this.w.phase = 'dead';
       else this.fill(step, t);
     }
     if (steps <= 0) return;

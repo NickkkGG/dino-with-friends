@@ -180,6 +180,26 @@ for (const landscape of [false, true]) {
       for (const f of friends) await f.context().close();
     });
 
+    test('multiplayer: watching after GAME OVER, and the screen watched', async ({ page, browser }, info) => {
+      test.setTimeout(150_000);
+      const friends = await startRace(page, browser, [
+        { name: 'RARA', query: BOT }, { name: 'TOTO', query: BOT }, { name: 'DIKA', query: BOT },
+      ]);
+      const head = (p: Page) => p.locator('[data-testid="peek-slot"][data-player-id="p1"]');
+      await head(page).waitFor({ timeout: 100_000 });
+      await page.waitForTimeout(600); // the head has slid in
+      await shoot(page, info, `mp-watch${tag}`);
+      // The friend's own screen, with NICK's head peeking in: a laptop window, so once is enough.
+      if (!landscape && !isPhone(info.project.name)) {
+        const target = await page.evaluate(() => window.__dwf!.watch!.target);
+        const watched = friends[Number(target.slice(1)) - 2]!;
+        await head(watched).waitFor();
+        await watched.waitForTimeout(600);
+        await shoot(watched, info, 'mp-watched');
+      }
+      for (const f of friends) await f.context().close();
+    });
+
     test('multiplayer: the results', async ({ page, browser }, info) => {
       test.setTimeout(120_000);
       const [friend] = await startRace(page, browser, [{ name: 'RARA' }], BOT);

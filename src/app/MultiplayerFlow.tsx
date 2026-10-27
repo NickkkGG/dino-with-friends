@@ -8,6 +8,7 @@ import type { TestMode } from '../game/test-mode';
 import { createLobby } from '../net/api';
 import { LobbySession } from '../net/session';
 import type { SessionError, SessionView } from '../net/session';
+import { resultsOnShow } from './flow';
 import { LobbyScreen } from './LobbyScreen';
 import { MultiplayerScreen } from './MultiplayerScreen';
 import { NameScreen } from './NameScreen';
@@ -119,8 +120,9 @@ export function MultiplayerFlow({ sprites, sound, testMode, onExit, onScreen }: 
 
   // While the session tries to get its seat back the screens stay as they are, the race going on underneath.
   const inLobby = session !== null && (view?.status === 'joined' || view?.status === 'reconnecting');
-  // The results of a round stay until the player leaves them; one who comes in while they are on goes to the lobby.
-  const results = inLobby && view.end !== null && view.end.round > closed ? view.end : null;
+  // The results of a round stay until the player leaves them or the next round's countdown comes; one who comes in
+  // while they are on goes to the lobby.
+  const results = inLobby ? resultsOnShow(view.end, closed, view.countdown) : null;
   const racing = inLobby && results === null && (view.phase === 'countdown' || view.phase === 'playing');
   const screen = results ? 'results' : racing ? 'race' : inLobby ? 'lobby' : naming ? 'name' : 'multiplayer';
   useEffect(() => onScreen(screen), [screen, onScreen]);
@@ -130,7 +132,12 @@ export function MultiplayerFlow({ sprites, sound, testMode, onExit, onScreen }: 
       const back = () => setClosed(results.round);
       return <ResultsScreen sprites={sprites} sound={sound} end={results} you={view.you} onBack={back} />;
     }
-    if (racing) return <RaceScreen sprites={sprites} sound={sound} testMode={testMode} view={view} session={session} />;
+    if (racing) {
+      // A screen of its own for each round, which decides when it opens whether this player runs or watches.
+      return (
+        <RaceScreen key={view.round} sprites={sprites} sound={sound} testMode={testMode} view={view} session={session} />
+      );
+    }
     const leave = () => {
       session.leave();
       close();

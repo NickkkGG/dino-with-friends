@@ -383,6 +383,17 @@ body {
   background: #535353;
 }
 
+/* The line of the runner being watched is framed; the lines that can be picked take a click or a tap. */
+.board-frame {
+  position: absolute;
+  box-sizing: border-box;
+  border: solid #535353;
+}
+
+.board-row.pickable {
+  cursor: pointer;
+}
+
 /* The race: the tower and the lobby code placed by the layout, and the countdown over the track. */
 .race-board,
 .race-code {
@@ -438,6 +449,17 @@ body {
   to {
     transform: scale(1);
   }
+}
+
+/* Watching: WATCHING NAME with YOU PLAY NEXT ROUND under it, and the switch hint, each centred over the track. */
+.race-watch {
+  position: absolute;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  line-height: 0;
+  pointer-events: none;
 }
 
 /* A player who came in after the start: YOU PLAY NEXT ROUND in the middle, and the idle strip along the bottom. */

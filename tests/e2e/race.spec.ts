@@ -67,19 +67,16 @@ test('the host starts: everyone counts down together and runs on the same clock'
   await friend!.context().close();
 });
 
-test('a dino that is out stays on GAME OVER while the tower keeps going', async ({ page, browser }) => {
+test('a dino that is out stays on GAME OVER for its first 2 s', async ({ page, browser }) => {
   test.setTimeout(120_000);
   // Two who cannot lose keep the round going once NICK is out; one alone, and ahead of NICK, would end it there.
   const friends = await startRace(page, browser, [{ name: 'RARA', query: BOT }, { name: 'TOTO', query: BOT }]);
   await until(page, 'window.__dwf?.phase === "dead"', 90_000);
-  await expect(rowOf(page, 'p1')).toHaveAttribute('data-alive', 'false');
-  const board = page.getByTestId('race-board');
-  const before = await board.textContent();
-  await expect.poll(() => board.textContent(), { timeout: 5_000 }).not.toBe(before);
   expect(await page.evaluate(() => [window.__dwf!.screen, window.__dwf!.phase, window.__dwf!.race?.phase])).toEqual([
     'race', 'dead', 'dead',
   ]);
-  await expect(page.getByTestId('race-canvas')).toBeVisible();
+  await expect(page.getByTestId('race-canvas')).toHaveAttribute('data-mode', 'run');
+  await expect(rowOf(page, 'p1')).toHaveAttribute('data-alive', 'false');
   for (const f of friends) await f.context().close();
 });
 
@@ -147,7 +144,7 @@ test('BACK TO LOBBY goes back at once', async ({ page, browser }) => {
   await friend!.context().close();
 });
 
-test('a friend who comes in during the race watches the tower, then plays the next round', async ({ page, browser }) => {
+test('a friend who comes in during the race watches the leader, then plays the next round', async ({ page, browser }) => {
   test.setTimeout(150_000);
   const [rara] = await startRace(page, browser, [{ name: 'RARA' }], BOT);
   await until(page, 'window.__dwf?.race?.phase === "running"');
@@ -156,9 +153,10 @@ test('a friend who comes in during the race watches the tower, then plays the ne
   await dika.getByTestId('btn-multiplayer').click();
   await dika.getByTestId('code-input').fill(code);
   await dika.getByTestId('btn-join').click();
+  await expect(dika.getByTestId('watch-label')).toHaveText(/^WATCHING (NICK|RARA)$/);
   await expect(dika.getByTestId('next-round')).toHaveText('YOU PLAY NEXT ROUND');
   await expect(dika.getByTestId('board-row')).toHaveCount(2);
-  await expect(dika.getByTestId('race-canvas')).toHaveCount(0);
+  await expect(dika.getByTestId('race-canvas')).toHaveAttribute('data-mode', 'watch');
   // RARA, who plays nothing, is out: DIKA sees the results of the round they watched, then everyone is in the lobby.
   await expect(dika.getByTestId('results-screen')).toBeVisible({ timeout: 90_000 });
   await expect(dika.getByTestId('winner')).toHaveText('NICK WINS!');
